@@ -1,320 +1,313 @@
-import os
 import math
-import random
 import argparse
 import datetime
-
-import numpy as np
 
 from sklearn.metrics import cohen_kappa_score
 from sklearn.metrics import f1_score
 
 import tensorflow as tf
 
+from config import *
 from utils import *
-from dataloaders.general_loader import *
+from dataloaders.unique_image_loader import UniqueImageLoader
 from networks.factory import model_factory
 from networks.loss import loss_def
 
-NUM_CLASSES = 2
 
+# def test(testing_data, testing_labels, testing_instances, batch_size, weight_decay, mean_full, std_full, update_type,
+#          distribution_type, values, patch_acc_loss, patch_occur, model_name, former_model_path):
+#     channels = testing_data.shape[-1]
+#
+#     # TEST NETWORK
+#     crop = tf.compat.v1.placeholder(tf.int32)
+#     x = tf.compat.v1.placeholder(tf.float32, [None, None])
+#     y = tf.compat.v1.placeholder(tf.float32, [None, None])
+#
+#     keep_prob = tf.compat.v1.placeholder(tf.float32)  # dropout (keep probability)
+#     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
+#
+#     logits = model_factory(model_name, x, is_training, weight_decay, crop)
+#
+#     # Evaluate model
+#     pred_up = tf.argmax(logits, dimension=3)
+#
+#     if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
+#         crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
+#                                            debug=True)
+#     else:
+#         crop_size = int(values[0])
+#     stride_crop = int(math.floor(crop_size / 2.0))
+#
+#     # restore
+#     saver_restore = tf.compat.v1.train.Saver()
+#
+#     all_cm_test = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+#     all_kappa = np.zeros((len(testing_data)), dtype=np.float32)
+#     all_f1 = np.zeros((len(testing_data)), dtype=np.float32)
+#
+#     with tf.compat.v1.Session() as sess:
+#         print('Model restored from ' + former_model_path + '!')
+#         saver_restore.restore(sess, former_model_path)
+#
+#         for k in range(len(testing_data)):
+#             # print testing_data[k].shape
+#             h, w, c = testing_data[k].shape
+#
+#             instaces_stride_h = (
+#                 int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
+#                     ((h - crop_size) / stride_crop)) + 2)
+#             instaces_stride_w = (
+#                 int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
+#                     ((w - crop_size) / stride_crop)) + 2)
+#             instaces_stride = instaces_stride_h * instaces_stride_w
+#             # print '--', instaces_stride, (instaces_stride/batch_size)
+#             # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
+#
+#             prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
+#             occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
+#
+#             for i in range(0, (int(instaces_stride / batch_size) + 1 if instaces_stride % batch_size != 0 else int(
+#                         instaces_stride / batch_size))):
+#                 test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k], crop_size,
+#                                                                          stride_crop, i, batch_size)
+#                 normalize_images(test_patches, mean_full, std_full)
+#                 # raw_input_data("press")
+#
+#                 bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
+#                 by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+#
+#                 _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1.,
+#                                                                            is_training: False})
+#                 for j in range(len(_logits)):
+#                     prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
+#                     int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
+#                     occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
+#                     int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
+#                     # index += 1
+#
+#             occur_im[np.where(occur_im == 0)] = 1
+#             # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
+#             prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
+#             # print np.bincount(prob_im_argmax.astype(int).flatten())
+#             # create_prediction_map(output_path+"predImg_"+testing_instances[k]+".jpeg",
+#             # prob_im_argmax, testing_labels[k].shape)
+#
+#             cm_test_per_map = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+#             for t in range(h):
+#                 for r in range(w):
+#                     # print testing_labels[k][t][r]
+#                     # print prob_im_argmax[t][r]
+#                     cm_test_per_map[int(testing_labels[k, t, r])][int(prob_im_argmax[t, r])] += 1
+#                     all_cm_test[int(testing_labels[k, t, r])][int(prob_im_argmax[t, r])] += 1
+#
+#             _sum = 0.0
+#             total = 0
+#             for i in range(len(cm_test_per_map)):
+#                 _sum += (
+#                     cm_test_per_map[i][i] / float(np.sum(cm_test_per_map[i])) if np.sum(cm_test_per_map[i]) != 0 else 0)
+#                 total += cm_test_per_map[i][i]
+#
+#             cur_kappa = cohen_kappa_score(testing_labels[k].flatten(), prob_im_argmax.flatten())
+#             cur_f1 = f1_score(testing_labels[k].flatten(), prob_im_argmax.flatten(), average='micro')
+#             all_kappa[k] = cur_kappa
+#             all_f1[k] = cur_f1
+#
+#             print(" -- Test Map " + testing_instances[k] + ": Overall Accuracy= " + str(total) +
+#                   " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(cm_test_per_map))) +
+#                   " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+#                   " F1 Score= " + "{:.4f}".format(cur_f1) +
+#                   " Kappa= " + "{:.4f}".format(cur_kappa) +
+#                   " Confusion Matrix= " + np.array_str(cm_test_per_map).replace("\n", "")
+#                   )
+#
+#         _sum = 0.0
+#         total = 0
+#         for i in range(len(all_cm_test)):
+#             _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
+#             total += all_cm_test[i][i]
+#
+#         print(" -- Test ALL MAPS: Overall Accuracy= " + str(total) +
+#               " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
+#               " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+#               " F1 Score= " + np.array_str(all_f1).replace("\n", " ") +
+#               " Mean F1 Score= " + "{:.6f}".format(np.sum(all_f1) / float(len(testing_data))) +
+#               " Kappa= " + np.array_str(all_kappa).replace("\n", " ") +
+#               " Mean Kappa Score= " + "{:.6f}".format(np.sum(all_kappa) / float(len(testing_data))) +
+#               " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
+#               )
+#
+#
+# def validate_test(sess, testing_data, testing_labels, testing_instances, batch_size, mean_full, std_full, x, y, crop,
+#                   keep_prob, is_training, pred_up, logits, crop_size, step, output_path):
+#     stride_crop = int(math.floor(crop_size / 2.0))
+#     all_cm_test = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+#     all_kappa = np.zeros((len(testing_data)), dtype=np.float32)
+#     all_f1 = np.zeros((len(testing_data)), dtype=np.float32)
+#     all_f1_per_class = np.zeros((NUM_CLASSES), dtype=np.float32)
+#
+#     for k in range(len(testing_data)):
+#         # print testing_data[k].shape
+#         h, w, c = testing_data[k].shape
+#
+#         instaces_stride_h = (int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
+#             ((h - crop_size) / stride_crop)) + 2)
+#         instaces_stride_w = (int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
+#             ((w - crop_size) / stride_crop)) + 2)
+#         instaces_stride = instaces_stride_h * instaces_stride_w
+#         # print '--', instaces_stride, (instaces_stride/batch_size)
+#         # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
+#
+#         prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
+#         occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
+#
+#         for i in range(0, (int(instaces_stride / batch_size) + 1 if instaces_stride % batch_size != 0 else int(
+#                     instaces_stride / batch_size))):
+#             test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k], crop_size,
+#                                                                      stride_crop, i, batch_size)
+#             normalize_images(test_patches, mean_full, std_full)
+#             # raw_input("press")
+#
+#             bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
+#             by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+#
+#             _pred_up, _logits = sess.run([pred_up, logits],
+#                                          feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1., is_training: False})
+#             for j in range(len(_logits)):
+#                 prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
+#                         int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
+#                 occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size, int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
+#                 # index += 1
+#
+#         occur_im[np.where(occur_im == 0)] = 1
+#         # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
+#         prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
+#         # print np.bincount(prob_im_argmax.astype(int).flatten())
+#         # create_prediction_map(output_path + "predImg_" + testing_instances[k] + "_step_" + str(step) + ".jpeg",
+#         # prob_im_argmax, testing_labels[k].shape)
+#
+#         cm_test_per_map = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+#         for t in range(h):
+#             for r in range(w):
+#                 # print testing_labels[k][t][r]
+#                 # print prob_im_argmax[t][r]
+#                 if int(testing_labels[k][t][r]) != 6:  # not eroded
+#                     cm_test_per_map[int(testing_labels[k][t, r])][int(prob_im_argmax[t, r])] += 1
+#                     all_cm_test[int(testing_labels[k][t, r])][int(prob_im_argmax[t, r])] += 1
+#
+#         _sum = 0.0
+#         total = 0
+#         for i in range(len(cm_test_per_map)):
+#             _sum += (
+#                 cm_test_per_map[i][i] / float(np.sum(cm_test_per_map[i])) if np.sum(cm_test_per_map[i]) != 0 else 0)
+#             total += cm_test_per_map[i][i]
+#
+#         cur_kappa = cohen_kappa_score(testing_labels[k][testing_labels[k] != 6],
+#                                       prob_im_argmax[testing_labels[k] != 6])
+#         cur_f1 = f1_score(testing_labels[k][testing_labels[k] != 6],
+#                           prob_im_argmax[testing_labels[k] != 6], average='macro')
+#         cur_f1_per_class = f1_score(testing_labels[k][testing_labels[k] != 6],
+#                                     prob_im_argmax[testing_labels[k] != 6], average=None)
+#         all_kappa[k] = cur_kappa
+#         all_f1[k] = cur_f1
+#         if len(cur_f1_per_class) == 5:  # in this case, the current image has no background class
+#             cur_f1_per_class = np.append(cur_f1_per_class, 0.0)
+#
+#         all_f1_per_class += cur_f1_per_class
+#
+#         print("---- Iter " + str(step) +
+#               " -- Test Map " + testing_instances[k] + ": Overall Accuracy= " + str(total) +
+#               " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(cm_test_per_map))) +
+#               " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+#               " F1 Score per class= " + np.array_str(cur_f1_per_class).replace("\n", "") +
+#               " F1 Score= " + "{:.4f}".format(cur_f1) +
+#               " Kappa= " + "{:.4f}".format(cur_kappa) +
+#               " Confusion Matrix= " + np.array_str(cm_test_per_map).replace("\n", "")
+#               )
+#
+#     _sum = 0.0
+#     total = 0
+#     for i in range(len(all_cm_test)):
+#         _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
+#         total += all_cm_test[i][i]
+#
+#     print("---- Iter " + str(step) +
+#           " -- Test ALL MAPS: Overall Accuracy= " + str(total) +
+#           " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
+#           " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+#           " F1 Score= " + np.array_str(all_f1).replace("\n", " ") +
+#           " Mean F1 Score= " + "{:.6f}".format(np.sum(all_f1) / float(len(testing_data))) +
+#           " F1 Score per class= " + np.array_str(all_f1_per_class / float(len(testing_data))).replace("\n", "") +
+#           " Kappa= " + np.array_str(all_kappa).replace("\n", " ") +
+#           " Mean Kappa Score= " + "{:.6f}".format(np.sum(all_kappa) / float(len(testing_data))) +
+#           " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
+#           )
+#
+#
+# def test_or_validate_whole_images(former_model_path, testing_data, testing_labels,
+#                                   testing_instances, batch_size, weight_decay, mean_full, std_full, update_type,
+#                                   distribution_type, model_name, values, output_path):
+#     channels = testing_data[0].shape[-1]
+#
+#     bkp_values = values
+#     for model in former_model_path:
+#         # PLACEHOLDERS
+#         crop = tf.compat.v1.placeholder(tf.int32)
+#         x = tf.compat.v1.placeholder(tf.float32, [None, None])
+#         y = tf.compat.v1.placeholder(tf.float32, [None, None])
+#         keep_prob = tf.compat.v1.placeholder(tf.float32)
+#         is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
+#
+#         logits = model_factory(model_name, x, is_training, weight_decay, crop)
+#
+#         pred_up = tf.argmax(logits, dimension=3)
+#
+#         # restore
+#         saver_restore = tf.compat.v1.train.Saver()
+#
+#         with tf.compat.v1.Session() as sess:
+#             print('Model restored from ' + model)
+#             current_iter = int(model.split('-')[-1])
+#             saver_restore.restore(sess, model)
+#
+#             if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
+#                             distribution_type == 'multinomial':
+#                 patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
+#                 patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
+#                 # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
+#                 values = bkp_values
+#
+#             # Evaluate model
+#             if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
+#                             distribution_type == 'multinomial':
+#                 crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur,
+#                                                    update_type, debug=True)
+#             else:
+#                 crop_size = int(values[0])
+#
+#             validate_test(sess, testing_data, testing_labels, testing_instances, batch_size,
+#                           mean_full, std_full, x, y, crop, keep_prob, is_training, pred_up, logits, crop_size,
+#                           current_iter, output_path)
+#
+#             if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
+#                             distribution_type == 'multinomial':
+#                 ind = np.where(values == crop_size)
+#                 values = np.delete(values, ind)
+#                 patch_acc_loss = np.delete(patch_acc_loss, ind)
+#                 patch_occur = np.delete(patch_occur, ind)
+#
+#         tf.compat.v1.reset_default_graph()
 
-def test(testing_data, testing_labels, testing_instances, batch_size, weight_decay, mean_full, std_full, update_type,
-         distribution_type, values, patch_acc_loss, patch_occur, model_name, former_model_path):
-    channels = testing_data.shape[-1]
-
-    # TEST NETWORK
-    crop = tf.compat.v1.placeholder(tf.int32)
-    x = tf.compat.v1.placeholder(tf.float32, [None, None])
-    y = tf.compat.v1.placeholder(tf.float32, [None, None])
-
-    keep_prob = tf.compat.v1.placeholder(tf.float32)  # dropout (keep probability)
-    is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
-
-    logits = model_factory(model_name, x, is_training, weight_decay, crop)
-
-    # Evaluate model
-    pred_up = tf.argmax(logits, dimension=3)
-
-    if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
-        crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
-                                           debug=True)
-    else:
-        crop_size = int(values[0])
-    stride_crop = int(math.floor(crop_size / 2.0))
-
-    # restore
-    saver_restore = tf.compat.v1.train.Saver()
-
-    all_cm_test = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
-    all_kappa = np.zeros((len(testing_data)), dtype=np.float32)
-    all_f1 = np.zeros((len(testing_data)), dtype=np.float32)
-
-    with tf.compat.v1.Session() as sess:
-        print('Model restored from ' + former_model_path + '!')
-        saver_restore.restore(sess, former_model_path)
-
-        for k in range(len(testing_data)):
-            # print testing_data[k].shape
-            h, w, c = testing_data[k].shape
-
-            instaces_stride_h = (
-                int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
-                    ((h - crop_size) / stride_crop)) + 2)
-            instaces_stride_w = (
-                int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
-                    ((w - crop_size) / stride_crop)) + 2)
-            instaces_stride = instaces_stride_h * instaces_stride_w
-            # print '--', instaces_stride, (instaces_stride/batch_size)
-            # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
-
-            prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
-            occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
-
-            for i in range(0, (int(instaces_stride / batch_size) + 1 if instaces_stride % batch_size != 0 else int(
-                        instaces_stride / batch_size))):
-                test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k], crop_size,
-                                                                         stride_crop, i, batch_size)
-                normalize_images(test_patches, mean_full, std_full)
-                # raw_input_data("press")
-
-                bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
-                by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
-
-                _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1.,
-                                                                           is_training: False})
-                for j in range(len(_logits)):
-                    prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
-                    int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
-                    occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
-                    int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
-                    # index += 1
-
-            occur_im[np.where(occur_im == 0)] = 1
-            # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
-            prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
-            # print np.bincount(prob_im_argmax.astype(int).flatten())
-            # create_prediction_map(output_path+"predImg_"+testing_instances[k]+".jpeg",
-            # prob_im_argmax, testing_labels[k].shape)
-
-            cm_test_per_map = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
-            for t in range(h):
-                for r in range(w):
-                    # print testing_labels[k][t][r]
-                    # print prob_im_argmax[t][r]
-                    cm_test_per_map[int(testing_labels[k, t, r])][int(prob_im_argmax[t, r])] += 1
-                    all_cm_test[int(testing_labels[k, t, r])][int(prob_im_argmax[t, r])] += 1
-
-            _sum = 0.0
-            total = 0
-            for i in range(len(cm_test_per_map)):
-                _sum += (
-                    cm_test_per_map[i][i] / float(np.sum(cm_test_per_map[i])) if np.sum(cm_test_per_map[i]) != 0 else 0)
-                total += cm_test_per_map[i][i]
-
-            cur_kappa = cohen_kappa_score(testing_labels[k].flatten(), prob_im_argmax.flatten())
-            cur_f1 = f1_score(testing_labels[k].flatten(), prob_im_argmax.flatten(), average='micro')
-            all_kappa[k] = cur_kappa
-            all_f1[k] = cur_f1
-
-            print(" -- Test Map " + testing_instances[k] + ": Overall Accuracy= " + str(total) +
-                  " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(cm_test_per_map))) +
-                  " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
-                  " F1 Score= " + "{:.4f}".format(cur_f1) +
-                  " Kappa= " + "{:.4f}".format(cur_kappa) +
-                  " Confusion Matrix= " + np.array_str(cm_test_per_map).replace("\n", "")
-                  )
-
-        _sum = 0.0
-        total = 0
-        for i in range(len(all_cm_test)):
-            _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
-            total += all_cm_test[i][i]
-
-        print(" -- Test ALL MAPS: Overall Accuracy= " + str(total) +
-              " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
-              " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
-              " F1 Score= " + np.array_str(all_f1).replace("\n", " ") +
-              " Mean F1 Score= " + "{:.6f}".format(np.sum(all_f1) / float(len(testing_data))) +
-              " Kappa= " + np.array_str(all_kappa).replace("\n", " ") +
-              " Mean Kappa Score= " + "{:.6f}".format(np.sum(all_kappa) / float(len(testing_data))) +
-              " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
-              )
-
-
-def validate_test(sess, testing_data, testing_labels, testing_instances, batch_size, mean_full, std_full, x, y, crop,
-                  keep_prob, is_training, pred_up, logits, crop_size, step, output_path):
-    stride_crop = int(math.floor(crop_size / 2.0))
-    all_cm_test = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
-    all_kappa = np.zeros((len(testing_data)), dtype=np.float32)
-    all_f1 = np.zeros((len(testing_data)), dtype=np.float32)
-    all_f1_per_class = np.zeros((NUM_CLASSES), dtype=np.float32)
-
-    for k in range(len(testing_data)):
-        # print testing_data[k].shape
-        h, w, c = testing_data[k].shape
-
-        instaces_stride_h = (int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
-            ((h - crop_size) / stride_crop)) + 2)
-        instaces_stride_w = (int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
-            ((w - crop_size) / stride_crop)) + 2)
-        instaces_stride = instaces_stride_h * instaces_stride_w
-        # print '--', instaces_stride, (instaces_stride/batch_size)
-        # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
-
-        prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
-        occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
-
-        for i in range(0, (int(instaces_stride / batch_size) + 1 if instaces_stride % batch_size != 0 else int(
-                    instaces_stride / batch_size))):
-            test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k], crop_size,
-                                                                     stride_crop, i, batch_size)
-            normalize_images(test_patches, mean_full, std_full)
-            # raw_input("press")
-
-            bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
-            by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
-
-            _pred_up, _logits = sess.run([pred_up, logits],
-                                         feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1., is_training: False})
-            for j in range(len(_logits)):
-                prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
-                        int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
-                occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size, int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
-                # index += 1
-
-        occur_im[np.where(occur_im == 0)] = 1
-        # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
-        prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
-        # print np.bincount(prob_im_argmax.astype(int).flatten())
-        # create_prediction_map(output_path + "predImg_" + testing_instances[k] + "_step_" + str(step) + ".jpeg",
-        # prob_im_argmax, testing_labels[k].shape)
-
-        cm_test_per_map = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
-        for t in range(h):
-            for r in range(w):
-                # print testing_labels[k][t][r]
-                # print prob_im_argmax[t][r]
-                if int(testing_labels[k][t][r]) != 6:  # not eroded
-                    cm_test_per_map[int(testing_labels[k][t, r])][int(prob_im_argmax[t, r])] += 1
-                    all_cm_test[int(testing_labels[k][t, r])][int(prob_im_argmax[t, r])] += 1
-
-        _sum = 0.0
-        total = 0
-        for i in range(len(cm_test_per_map)):
-            _sum += (
-                cm_test_per_map[i][i] / float(np.sum(cm_test_per_map[i])) if np.sum(cm_test_per_map[i]) != 0 else 0)
-            total += cm_test_per_map[i][i]
-
-        cur_kappa = cohen_kappa_score(testing_labels[k][testing_labels[k] != 6],
-                                      prob_im_argmax[testing_labels[k] != 6])
-        cur_f1 = f1_score(testing_labels[k][testing_labels[k] != 6],
-                          prob_im_argmax[testing_labels[k] != 6], average='macro')
-        cur_f1_per_class = f1_score(testing_labels[k][testing_labels[k] != 6],
-                                    prob_im_argmax[testing_labels[k] != 6], average=None)
-        all_kappa[k] = cur_kappa
-        all_f1[k] = cur_f1
-        if len(cur_f1_per_class) == 5:  # in this case, the current image has no background class
-            cur_f1_per_class = np.append(cur_f1_per_class, 0.0)
-
-        all_f1_per_class += cur_f1_per_class
-
-        print("---- Iter " + str(step) +
-              " -- Test Map " + testing_instances[k] + ": Overall Accuracy= " + str(total) +
-              " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(cm_test_per_map))) +
-              " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
-              " F1 Score per class= " + np.array_str(cur_f1_per_class).replace("\n", "") +
-              " F1 Score= " + "{:.4f}".format(cur_f1) +
-              " Kappa= " + "{:.4f}".format(cur_kappa) +
-              " Confusion Matrix= " + np.array_str(cm_test_per_map).replace("\n", "")
-              )
-
-    _sum = 0.0
-    total = 0
-    for i in range(len(all_cm_test)):
-        _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
-        total += all_cm_test[i][i]
-
-    print("---- Iter " + str(step) +
-          " -- Test ALL MAPS: Overall Accuracy= " + str(total) +
-          " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
-          " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
-          " F1 Score= " + np.array_str(all_f1).replace("\n", " ") +
-          " Mean F1 Score= " + "{:.6f}".format(np.sum(all_f1) / float(len(testing_data))) +
-          " F1 Score per class= " + np.array_str(all_f1_per_class / float(len(testing_data))).replace("\n", "") +
-          " Kappa= " + np.array_str(all_kappa).replace("\n", " ") +
-          " Mean Kappa Score= " + "{:.6f}".format(np.sum(all_kappa) / float(len(testing_data))) +
-          " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
-          )
-
-
-def test_or_validate_whole_images(former_model_path, testing_data, testing_labels,
-                                  testing_instances, batch_size, weight_decay, mean_full, std_full, update_type,
-                                  distribution_type, model_name, values, output_path):
-    channels = testing_data[0].shape[-1]
-
-    bkp_values = values
-    for model in former_model_path:
-        # PLACEHOLDERS
-        crop = tf.compat.v1.placeholder(tf.int32)
-        x = tf.compat.v1.placeholder(tf.float32, [None, None])
-        y = tf.compat.v1.placeholder(tf.float32, [None, None])
-        keep_prob = tf.compat.v1.placeholder(tf.float32)
-        is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
-
-        logits = model_factory(model_name, x, is_training, weight_decay, crop)
-
-        pred_up = tf.argmax(logits, dimension=3)
-
-        # restore
-        saver_restore = tf.compat.v1.train.Saver()
-
-        with tf.compat.v1.Session() as sess:
-            print('Model restored from ' + model)
-            current_iter = int(model.split('-')[-1])
-            saver_restore.restore(sess, model)
-
-            if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
-                            distribution_type == 'multinomial':
-                patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
-                patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
-                # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
-                values = bkp_values
-
-            # Evaluate model
-            if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
-                            distribution_type == 'multinomial':
-                crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur,
-                                                   update_type, debug=True)
-            else:
-                crop_size = int(values[0])
-
-            validate_test(sess, testing_data, testing_labels, testing_instances, batch_size,
-                          mean_full, std_full, x, y, crop, keep_prob, is_training, pred_up, logits, crop_size,
-                          current_iter, output_path)
-
-            if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or \
-                            distribution_type == 'multinomial':
-                ind = np.where(values == crop_size)
-                values = np.delete(values, ind)
-                patch_acc_loss = np.delete(patch_acc_loss, ind)
-                patch_occur = np.delete(patch_occur, ind)
-
-        tf.compat.v1.reset_default_graph()
-
-
-def validation(sess, test_data, test_mask_data, testing_class_distribution, mean_full, std_full, batch_size, x, y, crop,
+def validation(sess, loader, num_classes, batch_size, x, y, crop,
                keep_prob, is_training, pred_up, step, crop_size):
-    linear = np.arange(len(testing_class_distribution))
-    all_cm_test = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+    linear = np.arange(len(loader.test_patches))
+    all_cm_test = np.zeros((num_classes, num_classes), dtype=np.uint32)
     first = True
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
-        test_patches, test_classes, _ = dynamically_create_patches(test_data, test_mask_data,
-                                                                   testing_class_distribution[batch], crop_size,
-                                                                   is_train=False)
-        normalize_images(test_patches, mean_full, std_full)
+        test_patches, test_classes, test_masks = loader.test_patches[batch], \
+                                                 loader.test_labels[batch], loader.test_masks[batch]
+        loader.normalize_images(test_patches)
 
         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
         by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
@@ -345,28 +338,18 @@ def validation(sess, test_data, test_mask_data, testing_class_distribution, mean
           " -- Time " + str(datetime.datetime.now().time()) +
           " -- Validation: Overall Accuracy= " + str(total) +
           " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
-          " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+          " Normalized Accuracy= " + "{:.6f}".format(_sum / float(num_classes)) +
           " F1 Score= " + "{:.4f}".format(cur_f1) +
           " Kappa= " + "{:.4f}".format(cur_kappa) +
           " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
           )
 
 
-def train(training_data, training_labels, training_class_distribution,
-          testing_data, testing_labels, testing_class_distribution, lr_initial, batch_size, niter,
-          weight_decay, mean_full, std_full, update_type, distribution_type, values,
+def train(loader, num_classes, lr_initial, batch_size, niter,
+          weight_decay, update_type, distribution_type, values,
           patch_acc_loss, patch_occur, patch_chosen_values, probs,
           output_path, model_name, former_model_path=None):
-    ###################
-    display_step = 50
-    epoch_number = 5000  # int(len(training_classes)/batch_size) # 1 epoch = images / batch
-    val_inteval = 5000  # int(len(training_classes)/batch_size)
-    ###################
 
-    selected_testing_instances = select_super_batch_instances(testing_class_distribution, batch_size=batch_size,
-                                                              super_batch=100)
-
-    # TRAIN NETWORK
     # Network Parameters
     dropout = 0.5  # Dropout, probability to keep units
 
@@ -398,7 +381,7 @@ def train(training_data, training_labels, training_class_distribution,
     # Initializing the variables
     init = tf.compat.v1.global_variables_initializer()
 
-    total_length = len(training_class_distribution)
+    total_length = len(loader.train_patches)
     shuffle = np.asarray(random.sample(range(total_length), total_length))
     epoch_counter = 1
     current_iter = 1
@@ -423,7 +406,7 @@ def train(training_data, training_labels, training_class_distribution,
         # aux variables
         it = 0
         epoch_mean = 0.0
-        epoch_cm_train = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+        epoch_cm_train = np.zeros((num_classes, num_classes), dtype=np.uint32)
 
         # Keep training until reach max iterations
         for step in range(current_iter, niter + 1):
@@ -442,10 +425,8 @@ def train(training_data, training_labels, training_class_distribution,
             print(cur_patch_size)  # cur_size_int
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
-            b_x, b_y, b_mask = dynamically_create_patches(training_data, training_labels,
-                                                          training_class_distribution[batch],
-                                                          cur_patch_size, is_train=True)
-            normalize_images(b_x, mean_full, std_full)
+            b_x, b_y, b_mask = loader.train_patches[batch], loader.train_labels[batch], loader.train_masks[batch]
+            loader.normalize_images(b_x)
             # print(b_x.shape, b_y.shape, b_mask.shape)
 
             # print b_x.shape, b_y.shape, b_mask.shape
@@ -469,7 +450,7 @@ def train(training_data, training_labels, training_class_distribution,
                 patch_occur[cur_size_int] += 1
 
             # DISPLAY TRAIN
-            if step != 0 and step % display_step == 0:
+            if step != 0 and step % DISPLAY_STEP == 0:
                 _sum = 0.0
                 for i in range(len(batch_cm_train)):
                     _sum += (batch_cm_train[i][i] / float(np.sum(batch_cm_train[i]))
@@ -479,12 +460,12 @@ def train(training_data, training_labels, training_class_distribution,
                       " -- Training Minibatch: Loss= " + "{:.6f}".format(batch_loss) +
                       " Absolut Right Pred= " + str(int(acc)) +
                       " Overall Accuracy= " + "{:.4f}".format(acc / float(np.sum(batch_cm_train))) +
-                      " Normalized Accuracy= " + "{:.4f}".format(_sum / float(NUM_CLASSES)) +
+                      " Normalized Accuracy= " + "{:.4f}".format(_sum / float(num_classes)) +
                       " Confusion Matrix= " + np.array_str(batch_cm_train).replace("\n", "")
                       )
 
             # DISPLAY TRAIN EPOCH
-            if step != 0 and step % epoch_number == 0:
+            if step != 0 and step % EPOCH_NUMBER == 0:
                 _sum = 0.0
                 for i in range(len(epoch_cm_train)):
                     _sum += (
@@ -492,15 +473,15 @@ def train(training_data, training_labels, training_class_distribution,
 
                 print("-- Iter " + str(step) + " -- Training Epoch:" +
                       " Overall Accuracy= " + "{:.6f}".format(epoch_mean / float(np.sum(epoch_cm_train))) +
-                      " Normalized Accuracy= " + "{:.6f}".format(_sum / float(NUM_CLASSES)) +
+                      " Normalized Accuracy= " + "{:.6f}".format(_sum / float(num_classes)) +
                       " Confusion Matrix= " + np.array_str(epoch_cm_train).replace("\n", "")
                       )
 
                 epoch_mean = 0.0
-                epoch_cm_train = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+                epoch_cm_train = np.zeros((num_classes, num_classes), dtype=np.uint32)
 
             # DISPLAY VALIDATION
-            if step != 0 and step % val_inteval == 0:
+            if step != 0 and step % VAL_INTERVAL == 0:
                 saver.save(sess, output_path + 'model', global_step=step)
                 if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
                     np.save(output_path + 'patch_acc_loss_step_' + str(step) + '.npy', patch_acc_loss)
@@ -513,8 +494,8 @@ def train(training_data, training_labels, training_class_distribution,
                 else:
                     cur_patch_val = int(values[0])
 
-                validation(sess, testing_data, testing_labels, selected_testing_instances, mean_full, std_full,
-                           batch_size, x, y, crop, keep_prob, is_training, pred_up, step, cur_patch_val)
+                validation(sess, loader, num_classes, batch_size, x, y, crop,
+                           keep_prob, is_training, pred_up, step, cur_patch_val)
 
             # EPOCH IS COMPLETE
             if min(it + batch_size, total_length) == total_length or total_length == it + batch_size:
@@ -536,87 +517,87 @@ def train(training_data, training_labels, training_class_distribution,
                                                    debug=True)
         else:
             cur_patch_val = int(values[0])
-        validation(sess, testing_data, testing_labels, selected_testing_instances, mean_full, std_full,
-                   batch_size, x, y, crop, keep_prob, is_training, pred_up, step, cur_patch_val)
+        validation(sess, loader, num_classes, batch_size, x, y, crop,
+                   keep_prob, is_training, pred_up, step, cur_patch_val)
 
     tf.compat.v1.reset_default_graph()
 
 
-def generate_final_maps(former_model_path, testing_data, testing_labels, testing_names,
-                        batch_size, weight_decay, mean_full, std_full, update_type,
-                        distribution_type, model_name, values, output_path):
-    # PLACEHOLDERS
-    crop = tf.compat.v1.placeholder(tf.int32)
-    x = tf.compat.v1.placeholder(tf.float32, [None, None])
-    y = tf.compat.v1.placeholder(tf.float32, [None, None])
-    keep_prob = tf.compat.v1.placeholder(tf.float32)
-    is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
-
-    logits = model_factory(model_name, x, is_training, weight_decay, crop)
-
-    pred_up = tf.argmax(logits, axis=3)
-
-    # restore
-    saver_restore = tf.compat.v1.train.Saver()
-
-    with tf.compat.v1.Session() as sess:
-        current_iter = int(former_model_path.split('-')[-1])
-        print('Model restored from ' + former_model_path)
-        patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
-        patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
-        # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
-        saver_restore.restore(sess, former_model_path)
-
-        # Evaluate model
-        if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
-            crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
-                                               debug=True)
-        else:
-            crop_size = int(values[0])
-        stride_crop = int(math.floor(crop_size / 2.0))
-
-        for k in range(len(testing_data)):
-            # print testing_data[k].shape
-            h, w, c = testing_data[k].shape
-
-            instaces_stride_h = (
-            int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
-                ((h - crop_size) / stride_crop)) + 2)
-            instaces_stride_w = (
-            int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
-                ((w - crop_size) / stride_crop)) + 2)
-            instaces_stride = instaces_stride_h * instaces_stride_w
-            # print '--', instaces_stride, (instaces_stride/batch_size)
-            # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
-
-            prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
-            occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
-
-            for i in range(0, math.ceil(int(instaces_stride) / batch_size)):
-                test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k],
-                                                                         crop_size, stride_crop, i, batch_size)
-                normalize_images(test_patches, mean_full, std_full)
-
-                bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
-                by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
-
-                _pred_up, _logits = sess.run([pred_up, logits],
-                                             feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1.,
-                                                        is_training: False})
-                for j in range(len(_logits)):
-                    prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
-                    int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
-                    occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
-                    int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
-                    # index += 1
-
-            occur_im[np.where(occur_im == 0)] = 1
-            # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
-            prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
-
-            create_prediction_map(output_path + testing_names[k], prob_im_argmax, testing_data[k].shape)
-
-    tf.compat.v1.reset_default_graph()
+# def generate_final_maps(former_model_path, testing_data, testing_labels, testing_names,
+#                         batch_size, weight_decay, mean_full, std_full, update_type,
+#                         distribution_type, model_name, values, output_path):
+#     # PLACEHOLDERS
+#     crop = tf.compat.v1.placeholder(tf.int32)
+#     x = tf.compat.v1.placeholder(tf.float32, [None, None])
+#     y = tf.compat.v1.placeholder(tf.float32, [None, None])
+#     keep_prob = tf.compat.v1.placeholder(tf.float32)
+#     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
+#
+#     logits = model_factory(model_name, x, is_training, weight_decay, crop)
+#
+#     pred_up = tf.argmax(logits, axis=3)
+#
+#     # restore
+#     saver_restore = tf.compat.v1.train.Saver()
+#
+#     with tf.compat.v1.Session() as sess:
+#         current_iter = int(former_model_path.split('-')[-1])
+#         print('Model restored from ' + former_model_path)
+#         patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
+#         patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
+#         # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
+#         saver_restore.restore(sess, former_model_path)
+#
+#         # Evaluate model
+#         if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
+#             crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
+#                                                debug=True)
+#         else:
+#             crop_size = int(values[0])
+#         stride_crop = int(math.floor(crop_size / 2.0))
+#
+#         for k in range(len(testing_data)):
+#             # print testing_data[k].shape
+#             h, w, c = testing_data[k].shape
+#
+#             instaces_stride_h = (
+#             int(((h - crop_size) / stride_crop)) + 1 if ((h - crop_size) % stride_crop) == 0 else int(
+#                 ((h - crop_size) / stride_crop)) + 2)
+#             instaces_stride_w = (
+#             int(((w - crop_size) / stride_crop)) + 1 if ((w - crop_size) % stride_crop) == 0 else int(
+#                 ((w - crop_size) / stride_crop)) + 2)
+#             instaces_stride = instaces_stride_h * instaces_stride_w
+#             # print '--', instaces_stride, (instaces_stride/batch_size)
+#             # ((instaces_stride/batch_size)+1 if instaces_stride%batch_size != 0 else (instaces_stride/batch_size))
+#
+#             prob_im = np.zeros([h, w, NUM_CLASSES], dtype=np.float32)
+#             occur_im = np.zeros([h, w, NUM_CLASSES], dtype=np.uint32)
+#
+#             for i in range(0, math.ceil(int(instaces_stride) / batch_size)):
+#                 test_patches, test_classes, pos = create_patches_per_map(testing_data[k], testing_labels[k],
+#                                                                          crop_size, stride_crop, i, batch_size)
+#                 normalize_images(test_patches, mean_full, std_full)
+#
+#                 bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
+#                 by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+#
+#                 _pred_up, _logits = sess.run([pred_up, logits],
+#                                              feed_dict={x: bx, y: by, crop: crop_size, keep_prob: 1.,
+#                                                         is_training: False})
+#                 for j in range(len(_logits)):
+#                     prob_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
+#                     int(pos[j][1]):int(pos[j][1]) + crop_size, :] += _logits[j, :, :, :]
+#                     occur_im[int(pos[j][0]):int(pos[j][0]) + crop_size,
+#                     int(pos[j][1]):int(pos[j][1]) + crop_size, :] += 1
+#                     # index += 1
+#
+#             occur_im[np.where(occur_im == 0)] = 1
+#             # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
+#             prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
+#
+#             create_prediction_map(output_path + testing_names[k], prob_im_argmax, testing_data[k].shape)
+#
+#     tf.compat.v1.reset_default_graph()
 
 
 '''
@@ -630,18 +611,20 @@ def main():
     parser = argparse.ArgumentParser(description='main')
     # general options
     parser.add_argument('--operation', type=str, required=True,
-                        help='Operation [Options: extract_features | generate_rank]')
+                        help='Operation [Options: training | validate_test | generate_final_maps]')
     parser.add_argument('--output_path', type=str, required=True,
                         help='Path to to save outcomes (such as images and trained models) of the algorithm.')
 
     # dataset options
     parser.add_argument('--dataset_input_path', type=str, required=True, help='Dataset path.')
-    parser.add_argument('--reference_crop_size', type=str, default=25, help='Reference crop size.')
-    parser.add_argument('--reference_stride_crop', type=str, default='jpg', help='Reference crop stride')
+    parser.add_argument('--dataset_gt_path', type=str, required=True, help='Ground truth path.')
+    parser.add_argument('--num_classes', type=int, required=True, help='Number of classes.')
+    parser.add_argument('--dataset_split_method', type=str, default='train_test',
+                        help='Split method the dataset [Options: train_test]')
 
     # model options
     parser.add_argument('--model_name', type=str, required=True, default='mobilefacenet',
-                        help='Model to test [Options: mobilefacenet | mobiface | sphereface]')
+                        help='Model to test [Options: dilated_grsl_rate8]')
     parser.add_argument('--model_path', type=str, default=None, help='Model path.')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.005, help='Weight decay')
@@ -649,16 +632,16 @@ def main():
     parser.add_argument('--niter', type=int, default=50000, help='Number of iterations')
 
     # dynamic dialted convnet options
+    parser.add_argument('--reference_crop_size', type=int, default=25, help='Reference crop size.')
+    parser.add_argument('--reference_stride_crop', type=int, default=5, help='Reference crop stride')
     parser.add_argument('--distribution_type', type=str, default='multi_fixed',
                         help='Distribution type [Options: uniform, multi_fixed, multinomial]')
     parser.add_argument('--values', type=str, default=None, help='Values considered in the distribution.')
-    parser.add_argument('--update_type', type=str, default=None,
-                        help='Update type [Options: loss, acc]')
+    parser.add_argument('--update_type', type=str, default='acc', help='Update type [Options: loss, acc]')
 
     args = parser.parse_args()
-    print(args)
-
     args.values = [int(i) for i in args.values.split(',')]
+    print(args)
 
     if args.distribution_type == 'multi_fixed':
         patch_acc_loss = np.zeros(len(args.values), dtype=np.float32)
@@ -670,55 +653,28 @@ def main():
         patch_chosen_values = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
         probs = define_multinomial_probs(args.values)
 
-    # PROCESS IMAGES
-    print('Reading images')
-    training_data, training_labels, _ = load_images(args.dataset_input_path)
-    testing_data, testing_labels, testing_names = load_images(args.dataset_input_path)
-    print(training_data.shape, training_labels.shape)
-    print(testing_data.shape, testing_labels.shape)
+    loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path)
+    print(loader.data.shape)
+    loader.split_dataset(args.reference_crop_size, args.reference_stride_crop, args.dataset_split_method)
+    loader.create_patches(loader.train_distrib, args.reference_crop_size, is_train=False)
 
     if args.operation == 'training':
-        print('Creating TRAINING class distribution...')
-        training_class_distribution = create_distributions_over_classes(training_labels, args.reference_crop_size,
-                                                                        args.reference_stride_crop)
-        print('Creating TESTING class distribution...')
-        testing_class_distribution = create_distributions_over_classes(testing_labels, args.reference_crop_size,
-                                                                       args.reference_stride_crop)
-
-    # create mean, std from training
-    if os.path.isfile(os.path.join(args.output_path, 'crop_' + str(args.reference_crop_size) + '_stride_' +
-                      str(args.reference_stride_crop) + '_mean.npy')):
-        mean_full = np.load(os.path.join(args.output_path, 'crop_' + str(args.reference_crop_size) + '_stride_' +
-                            str(args.reference_stride_crop) + '_mean.npy'), allow_pickle=True)
-        std_full = np.load(os.path.join(args.output_path, 'crop_' + str(args.reference_crop_size) + '_stride_' +
-                           str(args.reference_stride_crop) + '_std.npy'), allow_pickle=True)
-        print('Loaded Mean/Std from training instances')
-    else:
-        mean_full, std_full = compute_image_mean(training_data)
-        np.save(os.path.join(args.output_path, 'crop_' + str(args.reference_crop_size) + '_stride_' +
-                str(args.reference_stride_crop) + '_mean.npy'), mean_full)
-        np.save(os.path.join(args.output_path, 'crop_' + str(args.reference_crop_size) + '_stride_' +
-                str(args.reference_stride_crop) + '_std.npy'), std_full)
-        print('Created Mean/Std from training instances')
-
-    if args.operation == 'training':
-        train(training_data, training_labels, np.asarray(training_class_distribution[0] + training_class_distribution[1]),
-              testing_data, testing_labels, testing_class_distribution, args.lr_initial, args.batch_size, args.niter,
-              args.weight_decay, mean_full, std_full, args.update_type, args.distribution_type, args.values,
+        train(loader, args.num_classes, args.lr_initial, args.batch_size, args.niter,
+              args.weight_decay, args.update_type, args.distribution_type, args.values,
               (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
               (None if args.distribution_type == 'single_fixed' else patch_occur),
               (None if args.distribution_type == 'single_fixed' else patch_chosen_values),
               (None if args.distribution_type != 'multinomial' else probs),
               args.output_path, args.model_name, args.model_path)
-    elif args.operation == 'validate_test':
-        test_or_validate_whole_images(args.model_path.split(","), testing_data, testing_labels,
-                                      args.batch_size, args.weight_decay, mean_full, std_full, args.update_type,
-                                      args.distribution_type, args.model_name,
-                                      np.asarray(args.values), args.output_path)
-    elif args.operation == 'generate_final_maps':
-        generate_final_maps(args.model_path, testing_data, testing_labels, testing_names,
-                            args.batch_size, args.weight_decay, mean_full, std_full, args.update_type,
-                            args.distribution_type, args.model_name, args.values, args.output_path)
+    # elif args.operation == 'validate_test':
+    #     test_or_validate_whole_images(args.model_path.split(","), loader,
+    #                                   args.batch_size, args.weight_decay, args.update_type,
+    #                                   args.distribution_type, args.model_name,
+    #                                   np.asarray(args.values), args.output_path)
+    # elif args.operation == 'generate_final_maps':
+    #     generate_final_maps(args.model_path, loader,
+    #                         args.batch_size, args.weight_decay, args.update_type,
+    #                         args.distribution_type, args.model_name, args.values, args.output_path)
     else:
         raise NotImplementedError("Process " + args.operation + "not found!")
 
