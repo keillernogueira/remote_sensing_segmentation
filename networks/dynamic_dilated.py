@@ -2,14 +2,13 @@ from networks.layers import _conv_layer, _max_pool, _variable_with_weight_decay,
 
 import tensorflow as tf
 
-NUM_CLASSES = 2
 
-
-def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, batch_norm=True):
+def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, batch_norm=True):
     # Reshape input_data picture
-    x = tf.reshape(x, shape=[-1, crop_size, crop_size, 3])
+    x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
-    conv1 = _conv_layer(x, [5, 5, 3, 64], "conv1", weight_decay, is_training, rate=1, batch_norm=batch_norm)
+    conv1 = _conv_layer(x, [5, 5, num_input_bands, 64], "conv1", weight_decay, is_training,
+                        rate=1, batch_norm=batch_norm)
 
     conv2 = _conv_layer(conv1, [5, 5, 64, 64], 'conv2', weight_decay, is_training, rate=2, batch_norm=batch_norm)
 
@@ -22,10 +21,10 @@ def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, batch_norm=True)
     conv6 = _conv_layer(conv5, [3, 3, 256, 256], "conv6", weight_decay, is_training, rate=6, batch_norm=batch_norm)
 
     with tf.compat.v1.variable_scope('conv_classifier') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, NUM_CLASSES],
+        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, num_classes],
                                              ini=tf.contrib.layers.xavier_initializer_conv2d(dtype=tf.float32),
                                              weight_decay=weight_decay)
-        biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [num_classes], tf.constant_initializer(0.0))
 
         conv = tf.nn.conv2d(conv6, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
@@ -33,11 +32,12 @@ def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, batch_norm=True)
     return conv_classifier
 
 
-def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, batch_norm=True):
+def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, batch_norm=True):
     # Reshape input_data picture
-    x = tf.reshape(x, shape=[-1, crop_size, crop_size, 3])
+    x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
-    conv1 = _conv_layer(x, [5, 5, 3, 32], "conv1", weight_decay, is_training, rate=1, batch_norm=batch_norm)
+    conv1 = _conv_layer(x, [5, 5, num_input_bands, 32], "conv1", weight_decay, is_training,
+                        rate=1, batch_norm=batch_norm)
 
     conv2 = _conv_layer(conv1, [5, 5, 32, 32], 'conv2', weight_decay, is_training, rate=2, batch_norm=batch_norm)
     try:
@@ -70,10 +70,10 @@ def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, batch_no
         c5 = tf.concat(concat_dim=3, values=[c4, conv6])
 
     with tf.compat.v1.variable_scope('conv_classifier') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 448, NUM_CLASSES],
+        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 448, num_classes],
                                              ini=tf.contrib.layers.xavier_initializer_conv2d(dtype=tf.float32),
                                              weight_decay=weight_decay)
-        biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [num_classes], tf.constant_initializer(0.0))
 
         conv = tf.nn.conv2d(c5, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
@@ -81,11 +81,12 @@ def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, batch_no
     return conv_classifier
 
 
-def dilated_grsl(x, is_training, weight_decay, crop_size):
+def dilated_grsl(x, is_training, weight_decay, crop_size, num_input_bands, num_classes):
     # Reshape input_data picture
-    x = tf.reshape(x, shape=[-1, crop_size, crop_size, 3])
+    x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
-    conv1 = _conv_layer(x, [5, 5, 3, 64], "conv1", weight_decay, is_training, rate=1, activation='lrelu')
+    conv1 = _conv_layer(x, [5, 5, num_input_bands, 64], "conv1", weight_decay, is_training,
+                        rate=1, activation='lrelu')
     pool1 = _max_pool(conv1, kernel=[1, 3, 3, 1], strides=[1, 1, 1, 1], name='pool1')
 
     conv2 = _conv_layer(pool1, [5, 5, 64, 64], 'conv2', weight_decay, is_training, rate=2, activation='lrelu')
@@ -104,10 +105,10 @@ def dilated_grsl(x, is_training, weight_decay, crop_size):
     pool6 = _max_pool(conv6, kernel=[1, 3, 3, 1], strides=[1, 1, 1, 1], name='pool6')
 
     with tf.compat.v1.variable_scope('conv_classifier') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, NUM_CLASSES],
+        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, num_classes],
                                              ini=tf.contrib.layers.xavier_initializer_conv2d(dtype=tf.float32),
                                              weight_decay=weight_decay)
-        biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [num_classes], tf.constant_initializer(0.0))
 
         conv = tf.nn.conv2d(pool6, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
@@ -115,11 +116,12 @@ def dilated_grsl(x, is_training, weight_decay, crop_size):
     return conv_classifier
 
 
-def dilated_grsl_rate8(x, is_training, weight_decay, crop_size):
+def dilated_grsl_rate8(x, is_training, weight_decay, crop_size, num_input_bands, num_classes):
     # Reshape input_data picture
-    x = tf.reshape(x, shape=[-1, crop_size, crop_size, 3])
+    x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
-    conv1 = _conv_layer(x, [5, 5, 3, 64], "conv1", weight_decay, is_training, rate=1, activation='lrelu')
+    conv1 = _conv_layer(x, [5, 5, num_input_bands, 64], "conv1", weight_decay, is_training,
+                        rate=1, activation='lrelu')
     pool1 = _max_pool(conv1, kernel=[1, 3, 3, 1], strides=[1, 1, 1, 1], name='pool1')
 
     conv2 = _conv_layer(pool1, [5, 5, 64, 64], 'conv2', weight_decay, is_training, rate=2, activation='lrelu')
@@ -144,10 +146,10 @@ def dilated_grsl_rate8(x, is_training, weight_decay, crop_size):
     pool8 = _max_pool(conv8, kernel=[1, 3, 3, 1], strides=[1, 1, 1, 1], name='pool8')
 
     with tf.compat.v1.variable_scope('conv_classifier') as scope:
-        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, NUM_CLASSES],
+        kernel = _variable_with_weight_decay('weights', shape=[1, 1, 256, num_classes],
                                              ini=tf.contrib.layers.xavier_initializer_conv2d(dtype=tf.float32),
                                              weight_decay=weight_decay)
-        biases = _variable_on_cpu('biases', [NUM_CLASSES], tf.constant_initializer(0.0))
+        biases = _variable_on_cpu('biases', [num_classes], tf.constant_initializer(0.0))
 
         conv = tf.nn.conv2d(pool8, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)

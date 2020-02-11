@@ -55,7 +55,10 @@ class GeneralLoader:
 
                 if patch_class.shape == (crop_size, crop_size):
                     count = np.bincount(patch_class.astype(int).flatten())
-                    classes[int(np.argmax(count))].append((cur_x, cur_y))
+                    if len(count) == 2:
+                        classes[1].append((cur_x, cur_y))
+                    else:
+                        classes[0].append((cur_x, cur_y))
                 else:
                     raise NotImplementedError("Error create_distributions_over_classes: Current patch size is " +
                                               str(len(patch_class)) + "x" + str(len(patch_class[0])))
@@ -82,7 +85,7 @@ class GeneralLoader:
 
         return _mean, _std
 
-    def create_or_load_mean(self, stride_size, crop_size):
+    def create_or_load_mean(self, crop_size, stride_size):
         # create mean, std from training
         if os.path.isfile(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                           str(stride_size) + '_mean.npy')):
@@ -91,7 +94,9 @@ class GeneralLoader:
             self._std = np.load(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                                 str(stride_size) + '_std.npy'), allow_pickle=True)
         else:
-            self._mean, self._std = self.compute_image_mean(self.data)
+            patches, _, _ = self.create_patches(self.train_distrib, crop_size, is_train=False)
+            print(patches.shape)
+            self._mean, self._std = self.compute_image_mean(patches)
             np.save(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                     str(stride_size) + '_mean.npy'), self._mean)
             np.save(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
@@ -179,17 +184,17 @@ class GeneralLoader:
         mask_arr = np.asarray(masks, dtype=np.bool)
 
         if is_train is True:
-            self.train_patches = np.asarray(patches)
-            self.train_labels = np.asarray(classes_patches, dtype=np.int)
-            self.train_masks = np.asarray(masks, dtype=np.bool)
+            self.train_patches = pt_arr
+            self.train_labels = cl_arr
+            self.train_masks = mask_arr
         else:
-            self.test_patches = np.asarray(patches)
-            self.test_labels = np.asarray(classes_patches, dtype=np.int)
-            self.test_masks = np.asarray(masks, dtype=np.bool)
+            self.test_patches = pt_arr
+            self.test_labels = cl_arr
+            self.test_masks = mask_arr
 
         return pt_arr, cl_arr, mask_arr
 
-    def dynamically_create_patches(self, data, mask_data, training_instances_batch, crop_size, is_train=True):
+    def dynamically_create_patches(self, train_instances, crop_size, is_train=True):
         patches = []
         classes = self.num_classes * [0]
         classes_patches = []
@@ -198,24 +203,23 @@ class GeneralLoader:
         overall_count = 0
         flip_count = 0
 
-        for i in range(len(training_instances_batch)):
-            cur_map = training_instances_batch[i][0]
-            cur_x = training_instances_batch[i][1]
-            cur_y = training_instances_batch[i][2]
+        for i in range(len(train_instances)):
+            cur_x = train_instances[i][0]
+            cur_y = train_instances[i][1]
 
-            cur_patch = data[cur_map][cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+            cur_patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
             if len(cur_patch) != crop_size and len(cur_patch[0]) != crop_size:
                 cur_x = cur_x - (crop_size - len(cur_patch))
                 cur_y = cur_y - (crop_size - len(cur_patch[0]))
-                cur_patch = data[cur_map][cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+                cur_patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
             elif len(cur_patch) != crop_size:
                 cur_x = cur_x - (crop_size - len(cur_patch))
-                cur_patch = data[cur_map][cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+                cur_patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
             elif len(cur_patch[0]) != crop_size:
                 cur_y = cur_y - (crop_size - len(cur_patch[0]))
-                cur_patch = data[cur_map][cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+                cur_patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
 
-            cur_mask_patch = mask_data[cur_map][cur_x:cur_x + crop_size, cur_y:cur_y + crop_size]
+            cur_mask_patch = self.labels[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size]
 
             assert len(cur_patch) == crop_size and len(cur_patch[0]) == crop_size, \
                 "Error: Current PATCH size is " + str(len(cur_patch)) + "x" + str(len(cur_patch[0]))
@@ -231,7 +235,7 @@ class GeneralLoader:
             # DATA AUGMENTATION
             if is_train is True:
                 # ROTATION AUGMENTATION
-                cur_rot = training_instances_batch[i][3]
+                cur_rot = np.random.randint(0, 360)
                 possible_rotation = np.random.randint(0, 2)
                 if possible_rotation == 1:  # default = 1
                     # print 'rotation'
@@ -271,9 +275,14 @@ class GeneralLoader:
         cl_arr = np.asarray(classes_patches, dtype=np.int)
         mk_arr = np.asarray(masks, dtype=np.bool)
 
-        # print pt_arr.shape
-        # print cl_arr.shape
-        # print mk_arr.shape
+        if is_train is True:
+            self.train_patches = pt_arr
+            self.train_labels = cl_arr
+            self.train_masks = mk_arr
+        else:
+            self.test_patches = pt_arr
+            self.test_labels = cl_arr
+            self.test_masks = mk_arr
 
         return pt_arr, cl_arr, mk_arr
 

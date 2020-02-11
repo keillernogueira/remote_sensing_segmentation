@@ -29,10 +29,10 @@ class UniqueImageLoader(GeneralLoader):
 
             if concatenate_images_in_depth is True:
                 if first is True:
-                    images = image
+                    images = np.expand_dims(image, axis=2)
                     first = False
                 else:
-                    images = np.concatenate((images, image))
+                    images = np.concatenate((images, np.expand_dims(image, axis=2)), axis=2)
             else:
                 images.append(image)
 

@@ -2,8 +2,6 @@ import numpy as np
 
 import tensorflow as tf
 
-NUM_CLASSES = 2
-
 
 def leaky_relu(x, alpha=0.1):
     return tf.maximum(alpha * x, x)

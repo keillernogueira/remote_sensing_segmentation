@@ -1,3 +1,4 @@
+import os
 import math
 import argparse
 import datetime
@@ -299,14 +300,14 @@ from networks.loss import loss_def
 
 def validation(sess, loader, num_classes, batch_size, x, y, crop,
                keep_prob, is_training, pred_up, step, crop_size):
-    linear = np.arange(len(loader.test_patches))
+    linear = np.arange(len(loader.test_distrib))
     all_cm_test = np.zeros((num_classes, num_classes), dtype=np.uint32)
     first = True
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
-        test_patches, test_classes, test_masks = loader.test_patches[batch], \
-                                                 loader.test_labels[batch], loader.test_masks[batch]
+        test_patches, test_classes, test_masks = loader.dynamically_create_patches(loader.test_distrib[batch],
+                                                                                   crop_size, is_train=False)
         loader.normalize_images(test_patches)
 
         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
@@ -323,7 +324,7 @@ def validation(sess, loader, num_classes, batch_size, x, y, crop,
             all_labels = np.concatenate((all_labels, test_classes))
 
     # print(all_labels.shape, all_predcs.shape)
-    calc_accuracy_by_crop(all_labels, all_predcs, all_cm_test)
+    calc_accuracy_by_crop(all_labels, all_predcs, num_classes, all_cm_test)
 
     _sum = 0.0
     total = 0
@@ -353,15 +354,14 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
     # Network Parameters
     dropout = 0.5  # Dropout, probability to keep units
 
-    # PLACEHOLDERS
+    # placeholders
     crop = tf.compat.v1.placeholder(tf.int32)
     x = tf.compat.v1.placeholder(tf.float32, [None, None])
     y = tf.compat.v1.placeholder(tf.float32, [None, None])
-
-    keep_prob = tf.compat.v1.placeholder(tf.float32)  # dropout (keep probability)
+    keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
-    logits = model_factory(model_name, x, is_training, weight_decay, crop)
+    logits = model_factory(model_name, x, is_training, weight_decay, crop, len(loader._mean), num_classes)
 
     # Define loss and optimizer
     loss = loss_def(logits, y)
@@ -381,7 +381,7 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
     # Initializing the variables
     init = tf.compat.v1.global_variables_initializer()
 
-    total_length = len(loader.train_patches)
+    total_length = len(loader.train_distrib)
     shuffle = np.asarray(random.sample(range(total_length), total_length))
     epoch_counter = 1
     current_iter = 1
@@ -390,7 +390,7 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
     # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
     # with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
     with tf.compat.v1.Session() as sess:
-        if 'model' in former_model_path:
+        if former_model_path is not None and 'model' in former_model_path:
             current_iter = int(former_model_path.split('-')[-1])
             print('Model restored from ' + former_model_path)
             patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
@@ -425,7 +425,9 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
             print(cur_patch_size)  # cur_size_int
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
-            b_x, b_y, b_mask = loader.train_patches[batch], loader.train_labels[batch], loader.train_masks[batch]
+
+            b_x, b_y, b_mask = loader.dynamically_create_patches(loader.train_distrib[batch],
+                                                                 cur_patch_size, is_train=True)
             loader.normalize_images(b_x)
             # print(b_x.shape, b_y.shape, b_mask.shape)
 
@@ -438,10 +440,11 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
                                                     feed_dict={x: batch_x, y: batch_y, crop: cur_patch_size,
                                                                keep_prob: dropout, is_training: True})
 
-            acc, batch_cm_train = calc_accuracy_by_crop(b_y, batch_pred_up, epoch_cm_train, b_mask)
+            acc, batch_cm_train = calc_accuracy_by_crop(b_y, batch_pred_up, num_classes, epoch_cm_train, b_mask)
             epoch_mean += acc
 
-            if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
+            if distribution_type == 'multi_fixed' or distribution_type == 'uniform' \
+                    or distribution_type == 'multinomial':
                 # print (batch_loss if update_type == 'loss' else (acc/float(np.sum(batch_cm_train))))
                 patch_acc_loss[cur_size_int] += (
                     batch_loss * (epoch_counter / 10.0) if update_type == 'loss' else (
@@ -604,6 +607,7 @@ def train(loader, num_classes, lr_initial, batch_size, niter,
 RUN:
 python dynamic.py /home/users/keiller/tcu/temp_dataset/ /home/users/keiller/tcu/tgrs/output/fold1/ /home/users/keiller/tcu/tgrs/output/fold1/ 1 0.01 0.001 128 150000 100 75 dilated_grsl_rate8 multi_fixed 100,200,300,400 acc training
 python dynamic.py /home/users/keiller/tcu/temp_dataset/ /home/users/keiller/tcu/tgrs/output/fold3/ /home/users/keiller/tcu/tgrs/output/fold3/model-120000 3 0.01 0.001 32 150000 75 50 dilated8_grsl multi_fixed 50,75,100 acc training > /home/users/keiller/tcu/tgrs/output/fold3/out_v1.txt
+CUDA_VISIBLE_DEVICES=2 python3 main.py --operation training --output_path /home/kno/remote_sensing_segmentation/output/ --dataset_input_path /home/kno/dataset_laranjal/Dataset_Laranjal/Parrot\ Sequoia/ --dataset_gt_path /home/kno/dataset_laranjal/Dataset_Laranjal/Arvore_Segmentacao\ \(Sequoia\)/sequoia_raster.tif --num_classes 2 --model_name dilated_grsl_rate8 --values 25,50
 '''
 
 
@@ -641,6 +645,8 @@ def main():
 
     args = parser.parse_args()
     args.values = [int(i) for i in args.values.split(',')]
+    if not os.path.exists(args.output_path):
+        os.makedirs(args.output_path)
     print(args)
 
     if args.distribution_type == 'multi_fixed':
@@ -654,12 +660,13 @@ def main():
         probs = define_multinomial_probs(args.values)
 
     loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path)
-    print(loader.data.shape)
+    print(loader.data.shape, loader.labels.shape)
     loader.split_dataset(args.reference_crop_size, args.reference_stride_crop, args.dataset_split_method)
-    loader.create_patches(loader.train_distrib, args.reference_crop_size, is_train=False)
+    print(len(loader.train_distrib), len(loader.test_distrib))
+    loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
 
     if args.operation == 'training':
-        train(loader, args.num_classes, args.lr_initial, args.batch_size, args.niter,
+        train(loader, args.num_classes, args.learning_rate, args.batch_size, args.niter,
               args.weight_decay, args.update_type, args.distribution_type, args.values,
               (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
               (None if args.distribution_type == 'single_fixed' else patch_occur),

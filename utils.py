@@ -1,5 +1,7 @@
 import random
 import numpy as np
+import imageio
+from PIL import Image
 
 
 def define_multinomial_probs(values, dif_prob=2):
@@ -153,11 +155,11 @@ def create_prediction_map(img_name, prob_img, size_tuple):
     img.save(img_name + "_visual_pred.tif")
 
 
-def calc_accuracy_by_crop(true_crop, pred_crop, track_conf_matrix, masks=None):
+def calc_accuracy_by_crop(true_crop, pred_crop, num_classes, track_conf_matrix, masks=None):
     b, h, w = pred_crop.shape
 
     acc = 0
-    local_conf_matrix = np.zeros((NUM_CLASSES, NUM_CLASSES), dtype=np.uint32)
+    local_conf_matrix = np.zeros((num_classes, num_classes), dtype=np.uint32)
     # count = 0
     for i in range(b):
         for j in range(h):
