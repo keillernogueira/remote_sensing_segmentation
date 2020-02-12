@@ -421,16 +421,18 @@ def train(loader, lr_initial, batch_size, niter,
             if distribution_type == 'multi_fixed':
                 cur_size_int = np.random.randint(len(values))
                 cur_patch_size = int(values[cur_size_int])
+                print(cur_patch_size)
             elif distribution_type == 'uniform':
                 cur_patch_size = int(np.random.uniform(values[0], values[-1] + 1, 1))
                 cur_size_int = cur_patch_size - values[0]
+                print(cur_patch_size)
             elif distribution_type == 'multinomial':
                 cur_size_int = np.random.multinomial(1, probs).argmax()
                 cur_patch_size = values[0] + cur_size_int
+                print(cur_patch_size)
             elif distribution_type == 'single_fixed':
                 cur_patch_size = int(values[0])
 
-            print(cur_patch_size)  # cur_size_int
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
 
@@ -461,7 +463,7 @@ def train(loader, lr_initial, batch_size, niter,
                 patch_occur[cur_size_int] += 1
 
             # DISPLAY TRAIN
-            if step != 0 and step % DISPLAY_STEP == 0:
+            if step % DISPLAY_STEP == 0:
                 _sum = 0.0
                 for i in range(len(batch_cm_train)):
                     _sum += (batch_cm_train[i][i] / float(np.sum(batch_cm_train[i]))
@@ -476,7 +478,7 @@ def train(loader, lr_initial, batch_size, niter,
                       )
 
             # DISPLAY TRAIN EPOCH
-            if step != 0 and step % EPOCH_NUMBER == 0:
+            if step % EPOCH_NUMBER == 0:
                 _sum = 0.0
                 for i in range(len(epoch_cm_train)):
                     _sum += (
@@ -492,14 +494,13 @@ def train(loader, lr_initial, batch_size, niter,
                 epoch_cm_train = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
 
             # DISPLAY VALIDATION
-            if step != 0 and step % VAL_INTERVAL == 0:
+            if step % VAL_INTERVAL == 0:
                 saver.save(sess, output_path + 'model', global_step=step)
-                if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
+                if distribution_type == 'multi_fixed' or distribution_type == 'uniform' \
+                        or distribution_type == 'multinomial':
                     np.save(output_path + 'patch_acc_loss_step_' + str(step) + '.npy', patch_acc_loss)
                     np.save(output_path + 'patch_occur_step_' + str(step) + '.npy', patch_occur)
                     np.save(output_path + 'patch_chosen_values_step_' + str(step) + '.npy', patch_chosen_values)
-
-                if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
                     cur_patch_val = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur,
                                                            update_type, patch_chosen_values, debug=True)
                 else:
@@ -520,9 +521,6 @@ def train(loader, lr_initial, batch_size, niter,
             np.save(output_path + 'patch_acc_loss_step_' + str(step) + '.npy', patch_acc_loss)
             np.save(output_path + 'patch_occur_step_' + str(step) + '.npy', patch_occur)
             np.save(output_path + 'patch_chosen_values_step_' + str(step) + '.npy', patch_chosen_values)
-
-        # Test: Final
-        if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
             cur_patch_val = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
                                                    patch_chosen_values, debug=True)
         else:
@@ -580,6 +578,8 @@ def generate_final_maps(former_model_path, loader,
         occur_im[np.where(occur_im == 0)] = 1
         # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
         prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
+
+
 
         create_prediction_map(output_path + os.listdir(loader.dataset_input_path)[0].split('_')[0] +
                               '_prediction', prob_im_argmax)

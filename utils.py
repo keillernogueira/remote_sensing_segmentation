@@ -173,3 +173,4 @@ def calc_accuracy_by_crop(true_crop, pred_crop, num_classes, track_conf_matrix, 
 
     # print count, b*h*w
     return acc, local_conf_matrix
+

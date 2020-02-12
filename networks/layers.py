@@ -1,3 +1,4 @@
+import math
 import numpy as np
 
 import tensorflow as tf
@@ -15,6 +16,16 @@ def identity_initializer(scale=1.0):
             return tf.constant_op.constant(scale * np.identity(shape[0], dtype), dtype=dtype)
 
     return _initializer
+
+
+def _add_wd(var, wd, collection_name='losses'):
+    if not tf.get_variable_scope().reuse:
+        try:
+            weight_decay = tf.mul(tf.nn.l2_loss(var), wd, name='weight_loss')
+        except:
+            weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
+        tf.add_to_collection(collection_name, weight_decay)
+    return var
 
 
 def _variable_on_cpu(name, shape, ini):
@@ -84,8 +95,9 @@ def _squeeze_excitation_layer(input_data, weight_decay, ratio, layer_name):
 
 
 def _conv_layer(input_data, layer_shape, name, weight_decay, is_training, rate=1, strides=None, pad='SAME',
-                activation='relu', batch_norm=True, has_activation=True, is_normal_conv=False,
+                activation='relu', batch_norm=True, has_activation=True, is_normal_conv=True,
                 init_func=tf.contrib.layers.xavier_initializer_conv2d(dtype=tf.float32)):
+
     if strides is None:
         strides = [1, 1, 1, 1]
     with tf.compat.v1.variable_scope(name) as scope:
@@ -107,6 +119,60 @@ def _conv_layer(input_data, layer_shape, name, weight_decay, is_training, rate=1
                 conv_act = leaky_relu(conv_act)
 
         return conv_act
+
+
+def get_deconv_filter(final_shape):
+    width = final_shape[0]
+    heigh = final_shape[0]
+    f = math.ceil(width / 2.0)
+    c = (2 * f - 1 - f % 2) / (2.0 * f)
+    bilinear = np.zeros([final_shape[0], final_shape[1]])
+    for x in range(width):
+        for y in range(heigh):
+            value = (1 - abs(x / f - c)) * (1 - abs(y / f - c))
+            bilinear[x, y] = value
+    weights = np.zeros(final_shape)
+    for i in range(final_shape[2]):
+        for j in range(final_shape[3]):
+            weights[:, :, i, j] = bilinear
+
+    init = tf.constant_initializer(value=weights, dtype=tf.float32)
+    return tf.get_variable(name="up_filter", initializer=init, shape=weights.shape)
+
+
+def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=None, pad='SAME', debug=False):
+    # Stride is the one that commands the final output shape
+    '''
+        #### Estimate output of deconv
+        import tensorflow as tf
+        sess = tf.Session()
+        output_shape = [1,25,25,2]
+        strides = [1, 4, 4, 1]
+
+        l = tf.constant(0.1, shape=[1, 7, 7, 1024])
+        w = tf.constant(0.1, shape=[4, 4, 2, 1024])
+
+        h1 = tf.nn.conv2d_transpose(l, w, output_shape=output_shape, strides=strides, padding='SAME')
+        print sess.run(h1)
+
+        output = tf.constant(0.1, shape=output_shape)
+        expected_l = tf.nn.conv2d(output, w, strides=strides, padding='SAME')
+        print expected_l.get_shape()
+    '''
+    if strides is None:
+        strides = [1, 1, 1, 1]
+    with tf.variable_scope(name):
+        # logging.debug("Layer: %s, Fan-in: %d" % (name, in_features))
+        # final_shape = [ksize, ksize, NUM_CLASSES, in_features]
+
+        weights = get_deconv_filter(layer_shape)
+        _add_wd(weights, weight_decay)
+        deconv = tf.nn.conv2d_transpose(input, weights, output_shape, strides=strides, padding=pad)
+
+        if debug:
+            deconv = tf.Print(deconv, [tf.shape(deconv)], message='Shape of %s' % name, summarize=4, first_n=1)
+
+    return deconv
 
 
 def _max_pool(input_data, kernel, strides, name, pad='SAME', debug=False):
