@@ -143,16 +143,16 @@ def select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occu
         return cur_patch_val
 
 
-def create_prediction_map(img_name, prob_img, size_tuple):
-    im_array = np.empty([size_tuple[0], size_tuple[1]], dtype=np.uint8)
+def create_prediction_map(img_name, prob_img):
+    # im_array = np.empty([prob_img.shape[0], prob_img.shape[1], 3], dtype=np.uint8)
+    #
+    # for i in range(prob_img.shape[0]):
+    #     for j in range(prob_img.shape[1]):
+    #         im_array[i, j] = int(prob_img[i, j])
 
-    for i in range(size_tuple[0]):
-        for j in range(size_tuple[1]):
-            im_array[i, j] = int(prob_img[i][j])
-
-    imageio.imwrite(img_name + '.png', im_array * 255)
-    img = Image.fromarray(im_array)
-    img.save(img_name + "_visual_pred.tif")
+    imageio.imwrite(img_name + '.png', prob_img.astype(np.uint8) * 255)
+    # img = Image.fromarray(prob_img.astype(np.uint8) * 255)
+    # img.save(img_name + ".tif")
 
 
 def calc_accuracy_by_crop(true_crop, pred_crop, num_classes, track_conf_matrix, masks=None):

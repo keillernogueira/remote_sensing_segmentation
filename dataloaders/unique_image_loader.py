@@ -25,6 +25,7 @@ class UniqueImageLoader(GeneralLoader):
         first = True
         images = []
         for f in os.listdir(self.dataset_input_path):
+            # break
             image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, f)))
 
             if concatenate_images_in_depth is True:
@@ -36,6 +37,7 @@ class UniqueImageLoader(GeneralLoader):
             else:
                 images.append(image)
 
+        # images = np.random.rand(8777, 12148, 4)
         mask = imageio.imread(self.dataset_gt_path)
 
         return np.asarray(images), np.asarray(mask)
