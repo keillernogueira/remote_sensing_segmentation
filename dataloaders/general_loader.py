@@ -95,7 +95,6 @@ class GeneralLoader:
                                 str(stride_size) + '_std.npy'), allow_pickle=True)
         else:
             patches, _, _ = self.create_patches(self.train_distrib, crop_size, is_train=False)
-            print(patches.shape)
             self._mean, self._std = self.compute_image_mean(patches)
             np.save(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                     str(stride_size) + '_mean.npy'), self._mean)

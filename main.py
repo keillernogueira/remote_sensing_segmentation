@@ -368,7 +368,8 @@ def train(loader, lr_initial, batch_size, niter,
     keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
-    logits = model_factory(model_name, x, is_training, weight_decay, crop, len(loader._mean), loader.num_classes)
+    logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
+                           crop, len(loader._mean), loader.num_classes)
 
     # Define loss and optimizer
     loss = loss_def(logits, y)
@@ -404,7 +405,6 @@ def train(loader, lr_initial, batch_size, niter,
             patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
             patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
             patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
-            # print patch_acc_loss, patch_occur, patch_chosen_values
             saver_restore.restore(sess, former_model_path)
             current_iter = current_iter + 1
         else:
@@ -623,7 +623,7 @@ def main():
     parser.add_argument('--reference_crop_size', type=int, default=25, help='Reference crop size.')
     parser.add_argument('--reference_stride_crop', type=int, default=5, help='Reference crop stride')
     parser.add_argument('--distribution_type', type=str, default='multi_fixed',
-                        help='Distribution type [Options: uniform, multi_fixed, multinomial]')
+                        help='Distribution type [Options: single_fixed, uniform, multi_fixed, multinomial]')
     parser.add_argument('--values', type=str, default=None, help='Values considered in the distribution.')
     parser.add_argument('--update_type', type=str, default='acc', help='Update type [Options: loss, acc]')
 
