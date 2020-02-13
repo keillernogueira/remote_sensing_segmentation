@@ -60,8 +60,8 @@ def _batch_norm(input_data, is_training, scope=None):
                    )
 
 
-def _fc_layer(input, layer_shape, weight_decay, name, activation=None):
-    with tf.compat.v1.variable_scope(name):
+def _fc_layer(input, layer_shape, weight_decay, name, batch_norm=False, is_training=None, activation=None):
+    with tf.compat.v1.variable_scope(name) as scope:
         weights = _variable_with_weight_decay('weights', shape=layer_shape,
                                               ini=tf.truncated_normal_initializer(stddev=0.005, dtype=tf.float32),
                                               weight_decay=weight_decay)
@@ -69,6 +69,9 @@ def _fc_layer(input, layer_shape, weight_decay, name, activation=None):
 
         fc = tf.matmul(input, weights)
         fc = tf.add(fc, biases)
+
+        if batch_norm is True:
+            fc = _batch_norm(fc, is_training, scope=scope)
 
         if activation == 'relu':
             fc = tf.nn.relu(fc, name=name)
@@ -175,12 +178,51 @@ def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=
     return deconv
 
 
+def _up_sampling(pool, ind, output_shape, batch_size, name=None):
+    """
+       Unpooling layer after max_pool_with_argmax.
+       Args:
+           pool:   max pooled output tensor
+           ind:      argmax indices
+           ksize:     ksize is the same as for the pool
+       Return:
+           unpool:    unpooling tensor
+           :param batch_size:
+    """
+    with tf.variable_scope(name):
+        pool_ = tf.reshape(pool, [-1])
+        batch_range = tf.reshape(tf.range(batch_size, dtype=ind.dtype), [tf.shape(pool)[0], 1, 1, 1])
+        b = tf.ones_like(ind) * batch_range
+        b = tf.reshape(b, [-1, 1])
+        ind_ = tf.reshape(ind, [-1, 1])
+        ind_ = tf.concat([b, ind_], 1)
+        ret = tf.scatter_nd(ind_, pool_, shape=[batch_size, output_shape[1] * output_shape[2] * output_shape[3]])
+        # the reason that we use tf.scatter_nd: if we use tf.sparse_tensor_to_dense,
+        # then the gradient is None, which will cut off the network.
+        # But if we use tf.scatter_nd, the gradients for all the trainable variables will be tensors, instead of None.
+        # The usage for tf.scatter_nd is that: create a new tensor by applying sparse
+        # UPDATES(which is the pooling value) to individual values of slices within a
+        # zero tensor of given shape (FLAT_OUTPUT_SHAPE) according to the indices (ind_).
+        # If we ues the orignal code, the only thing we need to change is: changeing
+        # from tf.sparse_tensor_to_dense(sparse_tensor) to tf.sparse_add(tf.zeros((output_sahpe)),
+        # sparse_tensor) which will give us the gradients!!!
+        ret = tf.reshape(ret, [tf.shape(pool)[0], output_shape[1], output_shape[2], output_shape[3]])
+        return ret
+
+
 def _max_pool(input_data, kernel, strides, name, pad='SAME', debug=False):
     pool = tf.nn.max_pool2d(input_data, ksize=kernel, strides=strides, padding=pad, name=name)
     if debug:
         pool = tf.Print(pool, [tf.shape(pool)], message='Shape of %s' % name)
 
     return pool
+
+
+def _max_pool_with_argmax(input, kernel, strides, name, pad='SAME'):
+    with tf.variable_scope(name) as scope:
+        value, index = tf.nn.max_pool_with_argmax(tf.to_double(input), ksize=kernel, strides=strides,
+                                                  padding=pad, name=scope.name)
+    return tf.to_float(value), index, input.get_shape().as_list()
 
 
 def _avg_pool(input_data, kernel, strides, name, pad='SAME', debug=False):
