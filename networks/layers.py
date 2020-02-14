@@ -178,7 +178,7 @@ def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=
     return deconv
 
 
-def _up_sampling(pool, ind, output_shape, batch_size, name=None):
+def _up_sampling(pool, ind, output_shape, h, w, batch_size, name=None):
     """
        Unpooling layer after max_pool_with_argmax.
        Args:
@@ -191,12 +191,17 @@ def _up_sampling(pool, ind, output_shape, batch_size, name=None):
     """
     with tf.variable_scope(name):
         pool_ = tf.reshape(pool, [-1])
-        batch_range = tf.reshape(tf.range(batch_size, dtype=ind.dtype), [tf.shape(pool)[0], 1, 1, 1])
+        batch_range = tf.reshape(tf.range(tf.cast(batch_size, dtype=ind.dtype), dtype=ind.dtype),
+                                 [tf.shape(pool)[0], 1, 1, 1])
         b = tf.ones_like(ind) * batch_range
         b = tf.reshape(b, [-1, 1])
         ind_ = tf.reshape(ind, [-1, 1])
         ind_ = tf.concat([b, ind_], 1)
-        ret = tf.scatter_nd(ind_, pool_, shape=[batch_size, output_shape[1] * output_shape[2] * output_shape[3]])
+
+        # pool_ = tf.Print(pool_, [tf.shape(pool_)], message='Shape of pool_')
+        # ind_ = tf.Print(ind_, [tf.shape(ind_)], message='Shape of ind_')
+
+        ret = tf.scatter_nd(ind_, pool_, shape=[batch_size, h * w * output_shape[3]])
         # the reason that we use tf.scatter_nd: if we use tf.sparse_tensor_to_dense,
         # then the gradient is None, which will cut off the network.
         # But if we use tf.scatter_nd, the gradients for all the trainable variables will be tensors, instead of None.
@@ -206,7 +211,7 @@ def _up_sampling(pool, ind, output_shape, batch_size, name=None):
         # If we ues the orignal code, the only thing we need to change is: changeing
         # from tf.sparse_tensor_to_dense(sparse_tensor) to tf.sparse_add(tf.zeros((output_sahpe)),
         # sparse_tensor) which will give us the gradients!!!
-        ret = tf.reshape(ret, [tf.shape(pool)[0], output_shape[1], output_shape[2], output_shape[3]])
+        ret = tf.reshape(ret, [tf.shape(pool)[0], h, w, output_shape[3]])
         return ret
 
 

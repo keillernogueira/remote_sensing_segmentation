@@ -579,8 +579,6 @@ def generate_final_maps(former_model_path, loader,
         # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
         prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
 
-
-
         create_prediction_map(output_path + os.listdir(loader.dataset_input_path)[0].split('_')[0] +
                               '_prediction', prob_im_argmax)
 

@@ -4,7 +4,7 @@ import tensorflow as tf
 
 
 def pixelwise(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes):
-    x = tf.reshape(x, shape=[-1, crop, crop, 3])
+    x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
 
     conv1 = _conv_layer(x, [4, 4, num_input_bands, 64], "conv1", weight_decay, is_training, batch_norm=True)
     pool1 = _max_pool(conv1, kernel=[1, 2, 2, 1], strides=[1, 2, 2, 1], name='pool1')
