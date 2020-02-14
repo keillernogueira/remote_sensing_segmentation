@@ -20,8 +20,8 @@ pip install scikit-learn scipy scikit-image imageio
 - Pixelwise
 
     - [Paper](https://arxiv.org/abs/1804.04020)
-    
-    
+
+
     @inprocedings{knogueira_sibgrapi_2015,
         author={K. {Nogueira} and W. O. {Miranda} and J. A. D. {Santos}},
         booktitle={2015 28th SIBGRAPI Conference on Graphics, Patterns and Images},

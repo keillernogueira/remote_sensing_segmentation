@@ -2,6 +2,7 @@ from networks.dynamic_dilated import *
 from networks.fcn import *
 from networks.pixelwise import *
 from networks.segnet import *
+from networks.unet import *
 
 
 def model_factory(model_name, x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes):
@@ -32,6 +33,9 @@ def model_factory(model_name, x, dropout, is_training, weight_decay, crop, num_i
 
     elif model_name == 'segnet_25':
         logits = segnet_25(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes)
+
+    elif model_name == 'unet_25':
+        logits = unet_25(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes)
     else:
         raise NotImplementedError('Network not identified: ' + model_name)
     return logits

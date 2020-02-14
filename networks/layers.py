@@ -143,8 +143,8 @@ def get_deconv_filter(final_shape):
     return tf.get_variable(name="up_filter", initializer=init, shape=weights.shape)
 
 
-def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=None, pad='SAME', debug=False):
-    # Stride is the one that commands the final output shape
+def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=None,
+                  pad='SAME', has_bias=False, debug=False):
     '''
         #### Estimate output of deconv
         import tensorflow as tf
@@ -172,13 +172,17 @@ def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=
         _add_wd(weights, weight_decay)
         deconv = tf.nn.conv2d_transpose(input, weights, output_shape, strides=strides, padding=pad)
 
+        if has_bias is True:
+            biases = _variable_on_cpu('biases', layer_shape[-1], tf.constant_initializer(0.1))
+            deconv = tf.nn.bias_add(deconv, biases)
+
         if debug:
             deconv = tf.Print(deconv, [tf.shape(deconv)], message='Shape of %s' % name, summarize=4, first_n=1)
 
     return deconv
 
 
-def _up_sampling(pool, ind, output_shape, h, w, batch_size, name=None):
+def _up_pooling(pool, ind, output_shape, h, w, batch_size, name=None):
     """
        Unpooling layer after max_pool_with_argmax.
        Args:
@@ -213,6 +217,17 @@ def _up_sampling(pool, ind, output_shape, h, w, batch_size, name=None):
         # sparse_tensor) which will give us the gradients!!!
         ret = tf.reshape(ret, [tf.shape(pool)[0], h, w, output_shape[3]])
         return ret
+
+
+def _crop_and_concat(x1,x2):
+    with tf.name_scope("crop_and_concat"):
+        x1_shape = tf.shape(x1)
+        x2_shape = tf.shape(x2)
+        # offsets for the top left corner of the crop
+        offsets = [0, (x1_shape[1] - x2_shape[1]) // 2, (x1_shape[2] - x2_shape[2]) // 2, 0]
+        size = [-1, x2_shape[1], x2_shape[2], -1]
+        x1_crop = tf.slice(x1, offsets, size)
+        return tf.concat([x1_crop, x2], 3)
 
 
 def _max_pool(input_data, kernel, strides, name, pad='SAME', debug=False):

@@ -1,6 +1,6 @@
 import math
 
-from networks.layers import _conv_layer, _max_pool_with_argmax, _up_sampling, \
+from networks.layers import _conv_layer, _max_pool_with_argmax, _up_pooling, \
     _variable_with_weight_decay, _variable_on_cpu
 
 import tensorflow as tf
@@ -36,7 +36,7 @@ def segnet_25(x, dropout, is_training, weight_decay, crop, num_input_bands, num_
     # ------------------------End of encoder-----------------------------
 
     decoder_dropout3 = tf.layers.dropout(pool3, rate=(1 - dropout), name="decoder_dropout3")
-    deconv3_1 = _up_sampling(decoder_dropout3, pool3_index, shape_3, h_pool3, w_pool3, batch_size, name="unpool_3")
+    deconv3_1 = _up_pooling(decoder_dropout3, pool3_index, shape_3, h_pool3, w_pool3, batch_size, name="unpool_3")
     deconv3_2 = _conv_layer(deconv3_1, [3, 3, 256, 256], "deconv3_2", weight_decay, is_training,
                             strides=[1, 1, 1, 1], pad='SAME')
     deconv3_3 = _conv_layer(deconv3_2, [3, 3, 256, 256], "deconv3_3", weight_decay, is_training,
@@ -45,13 +45,13 @@ def segnet_25(x, dropout, is_training, weight_decay, crop, num_input_bands, num_
                             strides=[1, 1, 1, 1], pad='SAME')
 
     decoder_dropout2 = tf.layers.dropout(deconv3_4, rate=(1 - dropout), name="decoder_dropout2")
-    deconv2_1 = _up_sampling(decoder_dropout2, pool2_index, shape_2, h_pool2, w_pool2, batch_size, name="unpool_2")
+    deconv2_1 = _up_pooling(decoder_dropout2, pool2_index, shape_2, h_pool2, w_pool2, batch_size, name="unpool_2")
     deconv2_2 = _conv_layer(deconv2_1, [3, 3, 128, 128], "deconv2_2", weight_decay, is_training,
                             strides=[1, 1, 1, 1], pad='SAME')
     deconv2_3 = _conv_layer(deconv2_2, [3, 3, 128, 64], "deconv2_3", weight_decay, is_training,
                             strides=[1, 1, 1, 1], pad='SAME')
 
-    deconv1_1 = _up_sampling(deconv2_3, pool1_index, shape_1, h_pool1, w_pool1, batch_size, name="unpool_1")
+    deconv1_1 = _up_pooling(deconv2_3, pool1_index, shape_1, h_pool1, w_pool1, batch_size, name="unpool_1")
     deconv1_2 = _conv_layer(deconv1_1, [3, 3, 64, 64], "deconv1_2", weight_decay, is_training,
                             strides=[1, 1, 1, 1], pad='SAME')
     deconv1_3 = _conv_layer(deconv1_2, [3, 3, 64, 64], "deconv1_3", weight_decay, is_training,
