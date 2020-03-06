@@ -31,7 +31,7 @@ class GeneralLoader:
         self.test_labels = None
         self.test_masks = None
 
-    def create_distributions_over_classes(self, stride_size, crop_size):
+    def create_distributions_over_classes(self, model, crop_size, stride_size):
         classes = [[[] for i in range(0)] for i in range(self.num_classes)]
 
         w, h = self.labels.shape
@@ -56,7 +56,12 @@ class GeneralLoader:
                 if patch_class.shape == (crop_size, crop_size):
                     count = np.bincount(patch_class.astype(int).flatten())
                     if len(count) == 2:
-                        classes[1].append((cur_x, cur_y))
+                        if model != 'pixelwise':
+                            classes[1].append((cur_x, cur_y))
+                        else:
+                            _cl = self.labels[cur_x + int(crop_size/2) - 1, cur_x + int(crop_size/2) - 1]
+                            # print('c', crop_size, cur_x, cur_y, _cl)
+                            classes[_cl].append((cur_x, cur_y))
                     else:
                         classes[0].append((cur_x, cur_y))
                 else:
@@ -85,6 +90,36 @@ class GeneralLoader:
 
         return _mean, _std
 
+    def dynamically_calculate_mean_and_std(self, train_distrib, crop_size):
+        mean_full = []
+        std_full = []
+
+        all_patches = []
+        # count = 0
+        for i in range(len(train_distrib)):
+            cur_x = train_distrib[i][0]
+            cur_y = train_distrib[i][1]
+
+            patches = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+            if len(patches[0]) != crop_size or len(patches[1]) != crop_size:
+                raise SystemError("Error! Current patch size: " + str(len(patches)) + "x" + str(len(patches[0])))
+
+            all_patches.append(patches)
+
+            if i > 0 and i % 5000 == 0:
+                mean, std = self.compute_image_mean(np.asarray(all_patches))
+                mean_full.append(mean)
+                std_full.append(std)
+                all_patches = []
+
+        # remaining images
+        mean, std = self.compute_image_mean(np.asarray(all_patches))
+        mean_full.append(mean)
+        std_full.append(std)
+
+        # print 'count', count
+        return np.mean(mean_full, axis=0), np.mean(std_full, axis=0)
+
     def create_or_load_mean(self, crop_size, stride_size):
         # create mean, std from training
         if os.path.isfile(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
@@ -94,8 +129,11 @@ class GeneralLoader:
             self._std = np.load(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                                 str(stride_size) + '_std.npy'), allow_pickle=True)
         else:
-            patches, _, _ = self.create_patches(self.train_distrib, crop_size, is_train=False)
-            self._mean, self._std = self.compute_image_mean(patches)
+            try:
+                patches, _, _ = self.create_patches(self.train_distrib, crop_size, is_train=False)
+                self._mean, self._std = self.compute_image_mean(patches)
+            except MemoryError:
+                self._mean, self._std = self.dynamically_calculate_mean_and_std(self.train_distrib, crop_size)
             np.save(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
                     str(stride_size) + '_mean.npy'), self._mean)
             np.save(os.path.join(self.output_path, 'crop_' + str(crop_size) + '_stride_' +
@@ -193,7 +231,7 @@ class GeneralLoader:
 
         return pt_arr, cl_arr, mask_arr
 
-    def dynamically_create_patches(self, train_instances, crop_size, is_train=True):
+    def dynamically_create_patches(self, model, train_instances, crop_size, is_train=True):
         patches = []
         classes = self.num_classes * [0]
         classes_patches = []
@@ -217,17 +255,18 @@ class GeneralLoader:
             elif len(cur_patch[0]) != crop_size:
                 cur_y = cur_y - (crop_size - len(cur_patch[0]))
                 cur_patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
-
-            cur_mask_patch = self.labels[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size]
-
             assert len(cur_patch) == crop_size and len(cur_patch[0]) == crop_size, \
                 "Error: Current PATCH size is " + str(len(cur_patch)) + "x" + str(len(cur_patch[0]))
 
-            assert len(cur_mask_patch) == crop_size and len(cur_mask_patch[0]) == crop_size, \
-                "Error: Current MASK size is " + str(len(cur_mask_patch)) + "x" + str(len(cur_mask_patch[0]))
+            if model == 'pixelwise':
+                cur_mask_patch = self.labels[cur_x + int(crop_size/2) - 1, cur_x + int(crop_size/2) - 1]
+            else:
+                cur_mask_patch = self.labels[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size]
+                assert len(cur_mask_patch) == crop_size and len(cur_mask_patch[0]) == crop_size, \
+                    "Error: Current MASK size is " + str(len(cur_mask_patch)) + "x" + str(len(cur_mask_patch[0]))
 
-            cur_class = np.argmax(np.bincount(cur_mask_patch.astype(int).flatten()))
-            classes[int(cur_class)] += 1
+            # cur_class = np.argmax(np.bincount(cur_mask_patch.astype(int).flatten()))
+            # classes[int(cur_class)] += 1
 
             cur_mask = np.ones((crop_size, crop_size), dtype=np.bool)
 
@@ -236,7 +275,7 @@ class GeneralLoader:
                 # ROTATION AUGMENTATION
                 cur_rot = np.random.randint(0, 360)
                 possible_rotation = np.random.randint(0, 2)
-                if possible_rotation == 1:  # default = 1
+                if model != 'pixelwise' and possible_rotation == 1:
                     # print 'rotation'
                     cur_patch = scipy.ndimage.rotate(cur_patch, cur_rot, order=0, reshape=False)
                     cur_mask_patch = scipy.ndimage.rotate(cur_mask_patch, cur_rot, order=0, reshape=False)
@@ -255,12 +294,18 @@ class GeneralLoader:
                     masks.append(cur_mask)
                 if possible_noise == 1:
                     patches.append(np.flipud(cur_patch))
-                    classes_patches.append(np.flipud(cur_mask_patch))
+                    if model == 'pixelwise':
+                        classes_patches.append(cur_mask_patch)
+                    else:
+                        classes_patches.append(np.flipud(cur_mask_patch))
                     masks.append(np.flipud(cur_mask))
                     flip_count += 1
                 elif possible_noise == 2:
                     patches.append(np.fliplr(cur_patch))
-                    classes_patches.append(np.fliplr(cur_mask_patch))
+                    if model == 'pixelwise':
+                        classes_patches.append(cur_mask_patch)
+                    else:
+                        classes_patches.append(np.fliplr(cur_mask_patch))
                     masks.append(np.fliplr(cur_mask))
                     flip_count += 1
             else:

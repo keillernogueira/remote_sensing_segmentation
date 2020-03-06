@@ -174,3 +174,15 @@ def calc_accuracy_by_crop(true_crop, pred_crop, num_classes, track_conf_matrix, 
     # print count, b*h*w
     return acc, local_conf_matrix
 
+
+def calc_accuracy_by_class(true_crop, pred_crop, num_classes, track_conf_matrix):
+    acc = 0
+    local_conf_matrix = np.zeros((num_classes, num_classes), dtype=np.uint32)
+    # count = 0
+    for i in range(len(true_crop)):
+        if true_crop[i] == pred_crop[i]:
+            acc = acc + 1
+        track_conf_matrix[true_crop[i]][pred_crop[i]] += 1
+        local_conf_matrix[true_crop[i]][pred_crop[i]] += 1
+
+    return acc, local_conf_matrix

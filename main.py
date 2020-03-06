@@ -1,4 +1,5 @@
 import os
+import re
 import math
 import argparse
 import datetime
@@ -300,7 +301,7 @@ from networks.loss import loss_def
 #
 #         tf.compat.v1.reset_default_graph()
 
-def validation(sess, loader, batch_size, x, y, crop,
+def validation(sess, model_name, loader, batch_size, x, y, crop,
                keep_prob, is_training, pred_up, logits, step, crop_size):
     linear = np.arange(len(loader.test_distrib))
     all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
@@ -308,12 +309,17 @@ def validation(sess, loader, batch_size, x, y, crop,
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
-        test_patches, test_classes, test_masks = loader.dynamically_create_patches(loader.test_distrib[batch],
+        test_patches, test_classes, test_masks = loader.dynamically_create_patches(model_name,
+                                                                                   loader.test_distrib[batch],
                                                                                    crop_size, is_train=False)
+        print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
         loader.normalize_images(test_patches)
 
         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
-        by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+        if model_name != 'pixelwise':
+            by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+        else:
+            by = test_classes
 
         _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size,
                                                                    keep_prob: 1., is_training: False})
@@ -329,7 +335,10 @@ def validation(sess, loader, batch_size, x, y, crop,
             all_logits = np.concatenate((all_logits, _logits))
 
     # print(len(loader.test_distrib), all_labels.shape, all_predcs.shape, all_logits.shape)
-    calc_accuracy_by_crop(all_labels, all_predcs, loader.num_classes, all_cm_test)
+    if model_name == 'pixelwise':
+        calc_accuracy_by_class(all_labels, all_predcs, loader.num_classes, all_cm_test)
+    else:
+        calc_accuracy_by_crop(all_labels, all_predcs, loader.num_classes, all_cm_test)
 
     _sum = 0.0
     total = 0
@@ -364,15 +373,18 @@ def train(loader, lr_initial, batch_size, niter,
     # placeholders
     crop = tf.compat.v1.placeholder(tf.int32)
     x = tf.compat.v1.placeholder(tf.float32, [None, None])
-    y = tf.compat.v1.placeholder(tf.float32, [None, None])
+    if model_name == 'pixelwise':
+        y = tf.placeholder(tf.int32, [None])
+    else:
+        y = tf.compat.v1.placeholder(tf.float32, [None, None])
     keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
     logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
-                           crop, len(loader._mean), loader.num_classes)
+                           crop, len(loader._mean), loader.num_classes, values[0])
 
     # Define loss and optimizer
-    loss = loss_def(logits, y)
+    loss = loss_def(model_name, logits, y)
 
     global_step = tf.Variable(0, name='main_global_step', trainable=False)
     lr = tf.compat.v1.train.exponential_decay(lr_initial, global_step, 50000, 0.5, staircase=True)
@@ -380,10 +392,13 @@ def train(loader, lr_initial, batch_size, niter,
                                                      momentum=0.9).minimize(loss, global_step=global_step)
 
     # Define Metric Evaluate model
-    pred_up = tf.argmax(logits, axis=3)
+    if model_name == 'pixelwise':
+        pred = tf.argmax(logits, axis=1)
+    else:
+        pred = tf.argmax(logits, axis=3)
 
     # Add ops to save and restore all the variables.
-    saver = tf.compat.v1.train.Saver(max_to_keep=None)
+    saver = tf.compat.v1.train.Saver(max_to_keep=(None if 'dilated' in model_name else 5))
     # restore
     saver_restore = tf.compat.v1.train.Saver()
 
@@ -436,21 +451,29 @@ def train(loader, lr_initial, batch_size, niter,
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
 
-            b_x, b_y, b_mask = loader.dynamically_create_patches(loader.train_distrib[batch],
+            b_x, b_y, b_mask = loader.dynamically_create_patches(model_name, loader.train_distrib[batch],
                                                                  cur_patch_size, is_train=True)
             loader.normalize_images(b_x)
-            # print(b_x.shape, b_y.shape, b_mask.shape)
+            # print(b_x.shape, b_y.shape, b_mask.shape, np.bincount(b_y.flatten()))
 
             # print b_x.shape, b_y.shape, b_mask.shape
             batch_x = np.reshape(b_x, (-1, cur_patch_size * cur_patch_size * b_x.shape[-1]))
-            batch_y = np.reshape(b_y, (-1, cur_patch_size * cur_patch_size * 1))
+            if model_name != 'pixelwise':
+                batch_y = np.reshape(b_y, (-1, cur_patch_size * cur_patch_size * 1))
+            else:
+                batch_y = b_y
 
             # Run optimization op (backprop)
-            _, batch_loss, batch_pred_up = sess.run([optimizer, loss, pred_up],
+            _, batch_loss, batch_pred_up = sess.run([optimizer, loss, pred],
                                                     feed_dict={x: batch_x, y: batch_y, crop: cur_patch_size,
                                                                keep_prob: dropout, is_training: True})
 
-            acc, batch_cm_train = calc_accuracy_by_crop(b_y, batch_pred_up, loader.num_classes, epoch_cm_train, b_mask)
+            if model_name == 'pixelwise':
+                acc, batch_cm_train = calc_accuracy_by_class(b_y, batch_pred_up, loader.num_classes, epoch_cm_train)
+            else:
+                acc, batch_cm_train = calc_accuracy_by_crop(b_y, batch_pred_up, loader.num_classes,
+                                                            epoch_cm_train, b_mask)
+
             epoch_mean += acc
 
             if distribution_type == 'multi_fixed' or distribution_type == 'uniform' \
@@ -506,8 +529,8 @@ def train(loader, lr_initial, batch_size, niter,
                 else:
                     cur_patch_val = int(values[0])
 
-                validation(sess, loader, batch_size, x, y, crop,
-                           keep_prob, is_training, pred_up, logits, step, cur_patch_val)
+                validation(sess, model_name, loader, batch_size, x, y, crop,
+                           keep_prob, is_training, pred, logits, step, cur_patch_val)
 
             # EPOCH IS COMPLETE
             if min(it + batch_size, total_length) == total_length or total_length == it + batch_size:
@@ -525,8 +548,8 @@ def train(loader, lr_initial, batch_size, niter,
                                                    patch_chosen_values, debug=True)
         else:
             cur_patch_val = int(values[0])
-        validation(sess, loader, batch_size, x, y, crop,
-                   keep_prob, is_training, pred_up, logits, step, cur_patch_val)
+        validation(sess, model_name, loader, batch_size, x, y, crop,
+                   keep_prob, is_training, pred, logits, step, cur_patch_val)
 
     tf.compat.v1.reset_default_graph()
 
@@ -564,7 +587,7 @@ def generate_final_maps(former_model_path, loader,
             crop_size = int(values[0])
         # stride_crop = int(math.floor(crop_size / 2.0))
 
-        _, _, all_logits = validation(sess, loader, batch_size, x, y, crop,
+        _, _, all_logits = validation(sess, model_name, loader, batch_size, x, y, crop,
                                       keep_prob, is_training, pred_up, logits, current_iter, crop_size)
 
         prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
@@ -587,8 +610,6 @@ def generate_final_maps(former_model_path, loader,
 
 '''
 RUN:
-python dynamic.py /home/users/keiller/tcu/temp_dataset/ /home/users/keiller/tcu/tgrs/output/fold1/ /home/users/keiller/tcu/tgrs/output/fold1/ 1 0.01 0.001 128 150000 100 75 dilated_grsl_rate8 multi_fixed 100,200,300,400 acc training
-python dynamic.py /home/users/keiller/tcu/temp_dataset/ /home/users/keiller/tcu/tgrs/output/fold3/ /home/users/keiller/tcu/tgrs/output/fold3/model-120000 3 0.01 0.001 32 150000 75 50 dilated8_grsl multi_fixed 50,75,100 acc training > /home/users/keiller/tcu/tgrs/output/fold3/out_v1.txt
 CUDA_VISIBLE_DEVICES=2 python3 main.py --operation training --output_path /home/kno/remote_sensing_segmentation/output/ --dataset_input_path /home/kno/dataset_laranjal/Dataset_Laranjal/Parrot\ Sequoia/ --dataset_gt_path /home/kno/dataset_laranjal/Dataset_Laranjal/Arvore_Segmentacao\ \(Sequoia\)/sequoia_raster.tif --num_classes 2 --model_name dilated_grsl_rate8 --values 25,50
 '''
 
@@ -597,73 +618,101 @@ def main():
     parser = argparse.ArgumentParser(description='main')
     # general options
     parser.add_argument('--operation', type=str, required=True,
-                        help='Operation [Options: training | validate_test | generate_map]')
+                        help='Operation [Options: training | generate_map]')
     parser.add_argument('--output_path', type=str, required=True,
                         help='Path to to save outcomes (such as images and trained models) of the algorithm.')
 
     # dataset options
-    parser.add_argument('--dataset_input_path', type=str, required=True, help='Dataset path.')
-    parser.add_argument('--dataset_gt_path', type=str, required=True, help='Ground truth path.')
-    parser.add_argument('--num_classes', type=int, required=True, help='Number of classes.')
+    parser.add_argument('--dataset_input_path', type=str, help='Dataset path.')
+    parser.add_argument('--dataset_gt_path', type=str, help='Ground truth path.')
+    parser.add_argument('--num_classes', type=int, help='Number of classes.')
     parser.add_argument('--dataset_split_method', type=str, default='train_test',
                         help='Split method the dataset [Options: train_test]')
 
     # model options
-    parser.add_argument('--model_name', type=str, required=True, default='mobilefacenet',
+    parser.add_argument('--model_name', type=str, default='dilated_grsl_rate8',
                         help='Model to test [Options: dilated_grsl_rate8]')
     parser.add_argument('--model_path', type=str, default=None, help='Model path.')
     parser.add_argument('--learning_rate', type=float, default=0.01, help='Learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.005, help='Weight decay')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
-    parser.add_argument('--niter', type=int, default=50000, help='Number of iterations')
+    parser.add_argument('--niter', type=int, default=200000, help='Number of iterations')
 
-    # dynamic dialted convnet options
+    # dynamic dilated convnet options
     parser.add_argument('--reference_crop_size', type=int, default=25, help='Reference crop size.')
-    parser.add_argument('--reference_stride_crop', type=int, default=5, help='Reference crop stride')
+    parser.add_argument('--reference_stride_crop', type=int, default=15, help='Reference crop stride')
     parser.add_argument('--distribution_type', type=str, default='multi_fixed',
                         help='Distribution type [Options: single_fixed, uniform, multi_fixed, multinomial]')
     parser.add_argument('--values', type=str, default=None, help='Values considered in the distribution.')
     parser.add_argument('--update_type', type=str, default='acc', help='Update type [Options: loss, acc]')
 
     args = parser.parse_args()
-    args.values = [int(i) for i in args.values.split(',')]
+    if args.values is not None:
+        args.values = [int(i) for i in args.values.split(',')]
     if not os.path.exists(args.output_path):
         os.makedirs(args.output_path)
     print(args)
 
-    if args.distribution_type == 'multi_fixed':
-        patch_acc_loss = np.zeros(len(args.values), dtype=np.float32)
-        patch_occur = np.zeros(len(args.values), dtype=np.int32)
-        patch_chosen_values = np.zeros(len(args.values), dtype=np.int32)
-    elif args.distribution_type == 'uniform' or args.distribution_type == 'multinomial':
-        patch_acc_loss = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.float32)
-        patch_occur = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
-        patch_chosen_values = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
-        probs = define_multinomial_probs(args.values)
+    if args.operation == 'training' or args.operation == 'generate_map':
+        if args.distribution_type == 'multi_fixed':
+            patch_acc_loss = np.zeros(len(args.values), dtype=np.float32)
+            patch_occur = np.zeros(len(args.values), dtype=np.int32)
+            patch_chosen_values = np.zeros(len(args.values), dtype=np.int32)
+        elif args.distribution_type == 'uniform' or args.distribution_type == 'multinomial':
+            patch_acc_loss = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.float32)
+            patch_occur = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
+            patch_chosen_values = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
+            probs = define_multinomial_probs(args.values)
 
-    loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path)
-    print(loader.data.shape, loader.labels.shape)
-    loader.split_dataset(args.reference_crop_size, args.reference_stride_crop, args.dataset_split_method)
-    print(len(loader.train_distrib), len(loader.test_distrib))
-    loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
+        loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path)
+        print(loader.data.shape, loader.labels.shape)
+        loader.split_dataset(args.model_name, args.reference_crop_size, args.reference_stride_crop,
+                             args.dataset_split_method)
+        print(len(loader.train_distrib), len(loader.test_distrib))
+        loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
 
-    if args.operation == 'training':
-        train(loader, args.learning_rate, args.batch_size, args.niter,
-              args.weight_decay, args.update_type, args.distribution_type, args.values,
-              (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
-              (None if args.distribution_type == 'single_fixed' else patch_occur),
-              (None if args.distribution_type == 'single_fixed' else patch_chosen_values),
-              (None if args.distribution_type != 'multinomial' else probs),
-              args.output_path, args.model_name, args.model_path)
-    # elif args.operation == 'validate_test':
-    #     test_or_validate_whole_images(args.model_path.split(","), loader,
-    #                                   args.batch_size, args.weight_decay, args.update_type,
-    #                                   args.distribution_type, args.model_name,
-    #                                   np.asarray(args.values), args.output_path)
-    elif args.operation == 'generate_map':
-        generate_final_maps(args.model_path, loader,
-                            args.batch_size, args.weight_decay, args.update_type,
-                            args.distribution_type, args.model_name, args.values, args.output_path)
+        if args.operation == 'training':
+            train(loader, args.learning_rate, args.batch_size, args.niter,
+                  args.weight_decay, args.update_type, args.distribution_type, args.values,
+                  (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
+                  (None if args.distribution_type == 'single_fixed' else patch_occur),
+                  (None if args.distribution_type == 'single_fixed' else patch_chosen_values),
+                  (None if args.distribution_type != 'multinomial' else probs),
+                  args.output_path, args.model_name, args.model_path)
+        # elif args.operation == 'validate_test':
+        #     test_or_validate_whole_images(args.model_path.split(","), loader,
+        #                                   args.batch_size, args.weight_decay, args.update_type,
+        #                                   args.distribution_type, args.model_name,
+        #                                   np.asarray(args.values), args.output_path)
+        elif args.operation == 'generate_map':
+            generate_final_maps(args.model_path, loader,
+                                args.batch_size, args.weight_decay, args.update_type,
+                                args.distribution_type, args.model_name, args.values, args.output_path)
+
+    elif args.operation == 'filter_results':
+        try:
+            f = open(args.output_path, 'r')
+        except IOError:
+            raise IOError("Could not open file: ", args.output_path)
+
+        best_oa = 0.0
+        best_na = 0.0
+        best_oa_line = best_na_list = ''
+        for line in f:
+            if "Validation" in line:
+                if line[-1] == "\n":
+                    line = line[:-1]
+                res_match = re.match(r'.*Accuracy= (\d.\d+) .*Accuracy= (\d.\d+)', line)
+                cur_oa = float(res_match.group(1))  # Overall Accuracy
+                cur_na = float(res_match.group(2))  # Normalized Accuracy
+                if cur_oa > best_oa:
+                    best_oa = cur_oa
+                    best_oa_line = line
+                if cur_na > best_na:
+                    best_na = cur_na
+                    best_na_list = line
+        print(best_oa_line)
+        print(best_na_list)
     else:
         raise NotImplementedError("Process " + args.operation + "not found!")
 

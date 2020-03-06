@@ -298,7 +298,6 @@ def fcn_50_2_4x(x, dropout, is_training, crop_size, weight_decay, num_input_band
 def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
-    # print x.get_shape()
 
     conv1_1 = _conv_layer(x, [3, 3, num_input_bands, 64], 'conv1_1', weight_decay, is_training, batch_norm=True)
     conv1_2 = _conv_layer(conv1_1, [3, 3, 64, 64], 'conv1_2', weight_decay, is_training, batch_norm=True)
@@ -354,7 +353,7 @@ def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     # upscore2 = _upscore_layer(fuse_pool2, layerShape=tf.shape(pool1), name='upscore2', weight_decay=weight_decay,
     #                           ksize=4, stride=2)
     upscore2 = _deconv_layer(fuse_pool2, [4, 4, num_classes, fuse_pool2.get_shape()[3].value], output_shape,
-                             'upscore4', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
+                             'upscore2', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
 
     # score_pool1 = _score_layer(pool1, "score_pool1", weight_decay)
     score_pool1 = _conv_layer(pool1, [1, 1, pool1.get_shape()[3].value, num_classes],
@@ -370,7 +369,7 @@ def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     # upscore = _upscore_layer(fuse_pool1, layerShape=tf.shape(x), name='upscore7', weight_decay=weight_decay,
     #                          ksize=4, stride=2)
     upscore = _deconv_layer(fuse_pool1, [4, 4, num_classes, fuse_pool1.get_shape()[3].value], output_shape,
-                            'upscore7', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
+                            'upscore', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
 
     return upscore
 

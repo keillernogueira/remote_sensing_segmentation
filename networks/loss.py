@@ -4,9 +4,13 @@ import tensorflow as tf
 NUM_CLASSES = 2
 
 
-def loss_def(_logits, _labels):
-    logits = tf.reshape(_logits, [-1, NUM_CLASSES])
-    labels = tf.cast(tf.reshape(_labels, [-1]), tf.int32)
+def loss_def(model, _logits, _labels):
+    if model != 'pixelwise':
+        logits = tf.reshape(_logits, [-1, NUM_CLASSES])
+        labels = tf.cast(tf.reshape(_labels, [-1]), tf.int32)
+    else:
+        logits = _logits
+        labels = _labels
 
     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels,
                                                                    name='cross_entropy_per_example')

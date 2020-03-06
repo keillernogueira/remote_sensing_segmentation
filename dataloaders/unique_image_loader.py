@@ -25,7 +25,7 @@ class UniqueImageLoader(GeneralLoader):
         first = True
         images = []
         for f in os.listdir(self.dataset_input_path):
-            # break
+            break
             image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, f)))
 
             if concatenate_images_in_depth is True:
@@ -37,21 +37,20 @@ class UniqueImageLoader(GeneralLoader):
             else:
                 images.append(image)
 
-        # images = np.random.rand(8777, 12148, 4)
+        images = np.random.rand(8777, 12148, 4)
         mask = imageio.imread(self.dataset_gt_path)
 
         return np.asarray(images), np.asarray(mask)
 
-    def split_dataset(self, crop_size, stride_crop, dataset_split_method):
-        data_distribution = self.create_distributions_over_classes(crop_size, stride_crop)
-
+    def split_dataset(self, model, crop_size, stride_crop, dataset_split_method):
         # splitting dataset
         if dataset_split_method == 'train_test':
             if os.path.isfile(os.path.join(self.output_path, 'train_distrib.npy')):
                 train_distrib = np.load(os.path.join(self.output_path, 'train_distrib.npy'), allow_pickle=True)
                 test_distrib = np.load(os.path.join(self.output_path, 'test_distrib.npy'), allow_pickle=True)
             else:
-                train_distrib, test_distrib = split_train_test(data_distribution)
+                data_distribution = self.create_distributions_over_classes(model, crop_size, stride_crop)
+                train_distrib, test_distrib = split_train_test(model, data_distribution)
                 np.save(os.path.join(self.output_path, 'train_distrib.npy'), train_distrib)
                 np.save(os.path.join(self.output_path, 'test_distrib.npy'), test_distrib)
         else:

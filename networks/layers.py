@@ -173,7 +173,7 @@ def _deconv_layer(input, layer_shape, output_shape, name, weight_decay, strides=
         deconv = tf.nn.conv2d_transpose(input, weights, output_shape, strides=strides, padding=pad)
 
         if has_bias is True:
-            biases = _variable_on_cpu('biases', layer_shape[-1], tf.constant_initializer(0.1))
+            biases = _variable_on_cpu('biases', layer_shape[-2], tf.constant_initializer(0.1))
             deconv = tf.nn.bias_add(deconv, biases)
 
         if debug:
@@ -219,10 +219,10 @@ def _up_pooling(pool, ind, output_shape, h, w, batch_size, name=None):
         return ret
 
 
-def _crop_and_concat(x1,x2):
+def _crop_and_concat(x1, x2, x1_shape, x2_shape):
     with tf.name_scope("crop_and_concat"):
-        x1_shape = tf.shape(x1)
-        x2_shape = tf.shape(x2)
+        # x1_shape = tf.shape(x1)
+        # x2_shape = tf.shape(x2)
         # offsets for the top left corner of the crop
         offsets = [0, (x1_shape[1] - x2_shape[1]) // 2, (x1_shape[2] - x2_shape[2]) // 2, 0]
         size = [-1, x2_shape[1], x2_shape[2], -1]
