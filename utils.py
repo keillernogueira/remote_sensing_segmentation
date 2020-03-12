@@ -1,7 +1,23 @@
 import random
 import numpy as np
 import imageio
-from PIL import Image
+import argparse
+
+
+def str2bool(v):
+    """
+    Function to transform strings into booleans.
+
+    v: string variable
+    """
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 
 def define_multinomial_probs(values, dif_prob=2):

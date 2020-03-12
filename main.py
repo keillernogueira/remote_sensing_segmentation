@@ -1,9 +1,7 @@
 import os
 import re
 import math
-import argparse
 import datetime
-import random
 
 import numpy as np
 from sklearn.metrics import cohen_kappa_score
@@ -312,7 +310,7 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
         test_patches, test_classes, test_masks = loader.dynamically_create_patches(model_name,
                                                                                    loader.test_distrib[batch],
                                                                                    crop_size, is_train=False)
-        print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
+        # print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
         loader.normalize_images(test_patches)
 
         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
@@ -377,6 +375,7 @@ def train(loader, lr_initial, batch_size, niter,
         y = tf.placeholder(tf.int32, [None])
     else:
         y = tf.compat.v1.placeholder(tf.float32, [None, None])
+    mask = tf.placeholder(tf.float32, [None, None])
     keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
@@ -384,12 +383,12 @@ def train(loader, lr_initial, batch_size, niter,
                            crop, len(loader._mean), loader.num_classes, values[0])
 
     # Define loss and optimizer
-    loss = loss_def(model_name, logits, y)
+    loss = loss_def(model_name, logits, y, mask)
 
     global_step = tf.Variable(0, name='main_global_step', trainable=False)
     lr = tf.compat.v1.train.exponential_decay(lr_initial, global_step, 50000, 0.5, staircase=True)
-    optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate=lr,
-                                                     momentum=0.9).minimize(loss, global_step=global_step)
+    optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate=lr, momentum=0.9).minimize(loss,
+                                                                                              global_step=global_step)
 
     # Define Metric Evaluate model
     if model_name == 'pixelwise':
@@ -454,7 +453,6 @@ def train(loader, lr_initial, batch_size, niter,
             b_x, b_y, b_mask = loader.dynamically_create_patches(model_name, loader.train_distrib[batch],
                                                                  cur_patch_size, is_train=True)
             loader.normalize_images(b_x)
-            # print(b_x.shape, b_y.shape, b_mask.shape, np.bincount(b_y.flatten()))
 
             # print b_x.shape, b_y.shape, b_mask.shape
             batch_x = np.reshape(b_x, (-1, cur_patch_size * cur_patch_size * b_x.shape[-1]))
@@ -462,11 +460,28 @@ def train(loader, lr_initial, batch_size, niter,
                 batch_y = np.reshape(b_y, (-1, cur_patch_size * cur_patch_size * 1))
             else:
                 batch_y = b_y
+            batch_mask = np.reshape(b_mask, (-1, cur_patch_size * cur_patch_size * 1))
 
             # Run optimization op (backprop)
-            _, batch_loss, batch_pred_up = sess.run([optimizer, loss, pred],
-                                                    feed_dict={x: batch_x, y: batch_y, crop: cur_patch_size,
-                                                               keep_prob: dropout, is_training: True})
+            _, batch_loss, batch_logits, batch_pred_up = sess.run([optimizer, loss, logits, pred],
+                                                                  feed_dict={x: batch_x, y: batch_y, mask: batch_mask,
+                                                                             crop: cur_patch_size,
+                                                                             keep_prob: dropout, is_training: True})
+
+            if math.isnan(batch_loss):
+                print('-------------------------NaN-----------------------------------------------')
+                print(b_x.shape, b_y.shape, b_mask.shape, np.bincount(b_y.flatten()))
+                print(np.min(b_x), np.max(b_x), np.isnan(b_x).any())
+                print(np.min(b_y), np.max(b_y), np.isnan(b_y).any())
+                print(np.min(b_mask), np.max(b_mask), np.isnan(b_mask).any())
+                print('---')
+                print(b_x.shape)
+                print(b_y.shape, np.bincount(b_y.flatten()))
+                print(b_mask.shape, np.bincount(b_mask.astype(int).flatten()))
+                print(batch_pred_up.shape, np.bincount(batch_pred_up.flatten()))
+                print(batch_logits.shape, b_y.shape)
+                print(np.min(batch_logits), np.max(batch_logits))
+                print('-------------------------NaN-----------------------------------------------')
 
             if model_name == 'pixelwise':
                 acc, batch_cm_train = calc_accuracy_by_class(b_y, batch_pred_up, loader.num_classes, epoch_cm_train)
@@ -481,7 +496,7 @@ def train(loader, lr_initial, batch_size, niter,
                 # print (batch_loss if update_type == 'loss' else (acc/float(np.sum(batch_cm_train))))
                 patch_acc_loss[cur_size_int] += (
                     batch_loss * (epoch_counter / 10.0) if update_type == 'loss' else (
-                        acc / float(np.sum(batch_cm_train))))
+                            acc / float(np.sum(batch_cm_train))))
                 # errorLoss[cur_size_int] += batch_loss*(epoch_counter/10.0)
                 patch_occur[cur_size_int] += 1
 
@@ -505,7 +520,7 @@ def train(loader, lr_initial, batch_size, niter,
                 _sum = 0.0
                 for i in range(len(epoch_cm_train)):
                     _sum += (
-                    epoch_cm_train[i][i] / float(np.sum(epoch_cm_train[i])) if np.sum(epoch_cm_train[i]) != 0 else 0)
+                        epoch_cm_train[i][i] / float(np.sum(epoch_cm_train[i])) if np.sum(epoch_cm_train[i]) != 0 else 0)
 
                 print("-- Iter " + str(step) + " -- Training Epoch:" +
                       " Overall Accuracy= " + "{:.6f}".format(epoch_mean / float(np.sum(epoch_cm_train))) +
@@ -621,6 +636,8 @@ def main():
                         help='Operation [Options: training | generate_map]')
     parser.add_argument('--output_path', type=str, required=True,
                         help='Path to to save outcomes (such as images and trained models) of the algorithm.')
+    parser.add_argument('--simulate_dataset', type=str2bool, default=False,
+                        help='Used to speed up the development process.')
 
     # dataset options
     parser.add_argument('--dataset_input_path', type=str, help='Dataset path.')
@@ -664,12 +681,16 @@ def main():
             patch_chosen_values = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
             probs = define_multinomial_probs(args.values)
 
-        loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path)
+        loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path,
+                                   args.simulate_dataset)
         print(loader.data.shape, loader.labels.shape)
         loader.split_dataset(args.model_name, args.reference_crop_size, args.reference_stride_crop,
                              args.dataset_split_method)
         print(len(loader.train_distrib), len(loader.test_distrib))
         loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
+
+        # _, mask, _ = loader.create_patches(loader.train_distrib, args.reference_crop_size, is_train=False)
+        # print(mask.shape, np.bincount(mask.flatten()))
 
         if args.operation == 'training':
             train(loader, args.learning_rate, args.batch_size, args.niter,

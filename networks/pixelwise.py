@@ -17,16 +17,16 @@ def pixelwise(x, dropout, is_training, weight_decay, crop, num_input_bands, num_
 
     reshape = tf.reshape(pool3, [-1, 4 * 4 * 256])
     drop_fc1 = tf.nn.dropout(reshape, dropout)
-    fc1 = _fc_layer(drop_fc1, [4 * 4 * 256, 2048], weight_decay, 'fc1', batch_norm=True,
+    fc1 = _fc_layer(drop_fc1, [4 * 4 * 256, 1024], weight_decay, 'fc1', batch_norm=True,
                     is_training=is_training, activation='relu')
 
     drop_fc2 = tf.nn.dropout(fc1, dropout)
-    fc2 = _fc_layer(drop_fc2, [2048, 2048], weight_decay, 'fc2', batch_norm=True,
+    fc2 = _fc_layer(drop_fc2, [1024, 1024], weight_decay, 'fc2', batch_norm=True,
                     is_training=is_training, activation='relu')
 
     # Output, class prediction
     with tf.variable_scope('fc3_logits') as scope:
-        weights = _variable_with_weight_decay('weights', [2048, num_classes],
+        weights = _variable_with_weight_decay('weights', [1024, num_classes],
                                               ini=tf.contrib.layers.xavier_initializer(dtype=tf.float32),
                                               weight_decay=weight_decay)
         biases = _variable_on_cpu('biases', [num_classes], tf.constant_initializer(0.1))

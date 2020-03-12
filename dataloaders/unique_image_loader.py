@@ -11,7 +11,7 @@ from dataloaders.spliters import split_train_test
 
 class UniqueImageLoader(GeneralLoader):
 
-    def __init__(self, dataset_input_path, dataset_gt_path, num_classes, output_path):
+    def __init__(self, dataset_input_path, dataset_gt_path, num_classes, output_path, simulate_images=False):
         super().__init__()
 
         self.dataset_input_path = dataset_input_path
@@ -19,13 +19,20 @@ class UniqueImageLoader(GeneralLoader):
         self.num_classes = num_classes
         self.output_path = output_path
 
-        self.data, self.labels = self.load_images()
+        self.data, self.labels = self.load_images(simulate_images=simulate_images)
 
-    def load_images(self, concatenate_images_in_depth=True):
+    def load_images(self, concatenate_images_in_depth=True, simulate_images=False):
         first = True
         images = []
+
+        if simulate_images is True:
+            mask = imageio.imread(self.dataset_gt_path)
+            images = np.random.rand(mask.shape[0], mask.shape[1], 4)
+            # images = np.random.rand(8777, 12148, 4)
+            print(mask.shape, images.shape)
+            return np.asarray(images), np.asarray(mask)
+
         for f in os.listdir(self.dataset_input_path):
-            break
             image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, f)))
 
             if concatenate_images_in_depth is True:
@@ -37,7 +44,6 @@ class UniqueImageLoader(GeneralLoader):
             else:
                 images.append(image)
 
-        images = np.random.rand(8777, 12148, 4)
         mask = imageio.imread(self.dataset_gt_path)
 
         return np.asarray(images), np.asarray(mask)

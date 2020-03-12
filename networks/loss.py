@@ -4,10 +4,14 @@ import tensorflow as tf
 NUM_CLASSES = 2
 
 
-def loss_def(model, _logits, _labels):
+def loss_def(model, _logits, _labels, _mask=None):
     if model != 'pixelwise':
-        logits = tf.reshape(_logits, [-1, NUM_CLASSES])
-        labels = tf.cast(tf.reshape(_labels, [-1]), tf.int32)
+        # logits = tf.reshape(_logits, [-1, NUM_CLASSES])
+        # labels = tf.cast(tf.reshape(_labels, [-1]), tf.int32)
+
+        mask = tf.cast(tf.reshape(_mask, [-1]), tf.bool)
+        logits = tf.boolean_mask(tf.reshape(_logits, [-1, NUM_CLASSES]), mask)
+        labels = tf.boolean_mask(tf.cast(tf.reshape(_labels, [-1]), tf.int64), mask)
     else:
         logits = _logits
         labels = _labels
