@@ -689,8 +689,21 @@ def main():
         print(len(loader.train_distrib), len(loader.test_distrib))
         loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
 
-        # _, mask, _ = loader.create_patches(loader.train_distrib, args.reference_crop_size, is_train=False)
+        # patches, _, _ = loader.create_patches(loader.test_distrib, args.reference_crop_size, is_train=False)
         # print(mask.shape, np.bincount(mask.flatten()))
+        # print(patches.shape)
+        # counter = 0
+        # total = 0
+        # n, h, w, c = patches.shape
+        # for i in range(n):
+        #     for j in range(h):
+        #         for k in range(w):
+        #             total += 1
+        #             if (patches[i, j, k] < 0).any():
+        #                 # print(i, j, patches[i, j, k])
+        #                 counter += 1
+        # print(counter, total)
+        # return
 
         if args.operation == 'training':
             train(loader, args.learning_rate, args.batch_size, args.niter,

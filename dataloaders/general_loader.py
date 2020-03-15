@@ -78,23 +78,13 @@ class GeneralLoader:
             data[:, :, :, i] = np.subtract(data[:, :, :, i], self._mean[i])
             data[:, :, :, i] = np.divide(data[:, :, :, i], self._std[i])
 
-        # data[:, :, :, 0] = np.subtract(data[:, :, :, 0], self._mean[0])
-        # data[:, :, :, 1] = np.subtract(data[:, :, :, 1], self._mean[1])
-        # data[:, :, :, 2] = np.subtract(data[:, :, :, 2], self._mean[2])
-        # data[:, :, :, 3] = np.subtract(data[:, :, :, 3], self._mean[3])
-        #
-        # data[:, :, :, 0] = np.divide(data[:, :, :, 0], self._std[0])
-        # data[:, :, :, 1] = np.divide(data[:, :, :, 1], self._std[1])
-        # data[:, :, :, 2] = np.divide(data[:, :, :, 2], self._std[2])
-        # data[:, :, :, 3] = np.divide(data[:, :, :, 3], self._std[3])
-
     def compute_image_mean(self, data):
         _mean = np.mean(np.mean(np.mean(data, axis=0), axis=0), axis=0)
         _std = np.std(data, axis=0, ddof=1)[0, 0, :]
 
         return _mean, _std
 
-    def dynamically_calculate_mean_and_std(self, train_distrib, crop_size):
+    def dynamically_calculate_mean_and_std(self, train_distrib, crop_size, remove_negative=True):
         mean_full = []
         std_full = []
 
@@ -104,16 +94,21 @@ class GeneralLoader:
             cur_x = train_distrib[i][0]
             cur_y = train_distrib[i][1]
 
-            patches = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
-            if len(patches[0]) != crop_size or len(patches[1]) != crop_size:
-                raise SystemError("Error! Current patch size: " + str(len(patches)) + "x" + str(len(patches[0])))
+            patch = self.data[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+            if len(patch[0]) != crop_size or len(patch[1]) != crop_size:
+                raise NotImplementedError("Error! Current patch size: " +
+                                          str(len(patch)) + "x" + str(len(patch[0])))
+            if remove_negative is True:
+                # swap negative values if its the case
+                patch[np.where(patch < 0)] = 0.0
 
-            all_patches.append(patches)
+            # print(cur_x, cur_y, np.min(patch), np.max(patch))
+            all_patches.append(patch)
 
             if i > 0 and i % 5000 == 0:
                 mean, std = self.compute_image_mean(np.asarray(all_patches))
-                print(np.min(mean), np.max(mean))
-                print(np.min(std), np.max(std))
+                # print(np.min(mean), np.max(mean))
+                # print(np.min(std), np.max(std))
                 mean_full.append(mean)
                 std_full.append(std)
                 all_patches = []
@@ -242,7 +237,7 @@ class GeneralLoader:
 
         return pt_arr, cl_arr, mask_arr
 
-    def dynamically_create_patches(self, model, train_instances, crop_size, is_train=True):
+    def dynamically_create_patches(self, model, train_instances, crop_size, is_train=True, remove_negative=True):
         patches = []
         classes = self.num_classes * [0]
         classes_patches = []
@@ -282,6 +277,17 @@ class GeneralLoader:
             # classes[int(cur_class)] += 1
 
             cur_mask = np.ones((crop_size, crop_size), dtype=np.bool)
+
+            if remove_negative is True:
+                # if cur_x == 1200 and cur_y == 7600:
+                #     print('1', np.bincount(cur_mask.flatten()))
+                #     print(cur_x, cur_y, np.where(cur_patch < 0), np.where(cur_patch < 0)[0].shape,
+                #           np.where(cur_patch[:, :, 2] < 0), np.where(cur_patch[:, :, 2] < 0)[0].shape)
+                # swap negative values if its the case
+                cur_patch[np.where(cur_patch < 0)] = 0.0
+                cur_mask[np.where(cur_patch[:, :, 2] < 0)] = 0
+                # if cur_x == 1200 and cur_y == 7600:
+                #     print('2', np.bincount(cur_mask.flatten()))
 
             # DATA AUGMENTATION
             if is_train is True:

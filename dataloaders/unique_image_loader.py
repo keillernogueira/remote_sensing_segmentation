@@ -33,6 +33,7 @@ class UniqueImageLoader(GeneralLoader):
             return np.asarray(images), np.asarray(mask)
 
         for f in os.listdir(self.dataset_input_path):
+            print(f)
             image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, f)))
 
             if concatenate_images_in_depth is True:

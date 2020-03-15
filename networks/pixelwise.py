@@ -33,4 +33,3 @@ def pixelwise(x, dropout, is_training, weight_decay, crop, num_input_bands, num_
         logits = tf.add(tf.matmul(fc2, weights), biases, name=scope.name)
 
     return logits
-

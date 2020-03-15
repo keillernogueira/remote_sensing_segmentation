@@ -8,8 +8,6 @@ CUDA_VISIBLE_DEVICES=0 python3 main.py --operation training --output_path /home/
 # UNET  -- 32
 CUDA_VISIBLE_DEVICES=0 python3 main.py --operation training --output_path /home/kno/remote_sensing_segmentation/output/unet/32/ --dataset_input_path /home/kno/dataset_laranjal/Dataset_Laranjal/Parrot\ Sequoia/all/ --dataset_gt_path /home/kno/dataset_laranjal/Dataset_Laranjal/Arvore_Segmentacao\ \(Sequoia\)/sequoia_raster.tif --num_classes 2 --model_name unet --values 32 --reference_crop_size 32 --reference_stride_crop 20 --distribution_type single_fixed
 
-#### to run
-
 # TGRS -- 25,50
 CUDA_VISIBLE_DEVICES=0 python3 main.py --operation training --output_path /home/kno/remote_sensing_segmentation/output/ddcnn/25_50_v2/ --dataset_input_path /home/kno/dataset_laranjal/Dataset_Laranjal/Parrot\ Sequoia/all/ --dataset_gt_path /home/kno/dataset_laranjal/Dataset_Laranjal/Arvore_Segmentacao\ \(Sequoia\)/sequoia_raster.tif --num_classes 2 --model_name dilated_grsl_rate8 --reference_crop_size 25 --reference_stride_crop 15 --values 25,50 --distribution_type multi_fixed
 
