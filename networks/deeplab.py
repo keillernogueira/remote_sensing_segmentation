@@ -3,6 +3,7 @@ from networks.layers import _conv_layer, _max_pool
 import tensorflow as tf
 
 
+# parameters: 2.228.224
 def atrous_spatial_pyramid_pooling(inputs, atrous_rates, weight_decay, is_training):
     with tf.variable_scope("aspp"):
         # with tf.contrib.slim.arg_scope(resnet_v2.resnet_arg_scope(batch_norm_decay=batch_norm_decay)):

@@ -579,7 +579,8 @@ def generate_final_maps(former_model_path, loader,
     keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
-    logits = model_factory(model_name, x, is_training, weight_decay, crop, len(loader._mean), loader.num_classes)
+    logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
+                           crop, len(loader._mean), loader.num_classes, values[0])
 
     pred_up = tf.argmax(logits, axis=3)
 
@@ -588,11 +589,12 @@ def generate_final_maps(former_model_path, loader,
 
     with tf.compat.v1.Session() as sess:
         current_iter = int(former_model_path.split('-')[-1])
-        print('Model restored from ' + former_model_path)
-        patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
-        patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
+        if 'dilated' in model_name:
+            patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
+            patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
         # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
         saver_restore.restore(sess, former_model_path)
+        print('Model restored from ' + former_model_path)
 
         # Evaluate model
         if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
@@ -623,10 +625,48 @@ def generate_final_maps(former_model_path, loader,
     tf.compat.v1.reset_default_graph()
 
 
-'''
-RUN:
-CUDA_VISIBLE_DEVICES=2 python3 main.py --operation training --output_path /home/kno/remote_sensing_segmentation/output/ --dataset_input_path /home/kno/dataset_laranjal/Dataset_Laranjal/Parrot\ Sequoia/ --dataset_gt_path /home/kno/dataset_laranjal/Dataset_Laranjal/Arvore_Segmentacao\ \(Sequoia\)/sequoia_raster.tif --num_classes 2 --model_name dilated_grsl_rate8 --values 25,50
-'''
+def validation_cpu(former_model_path, loader,
+                   batch_size, weight_decay,
+                   update_type, distribution_type, model_name, values, output_path):
+    # PLACEHOLDERS
+    crop = tf.compat.v1.placeholder(tf.int32)
+    x = tf.compat.v1.placeholder(tf.float32, [None, None])
+    y = tf.compat.v1.placeholder(tf.float32, [None, None])
+    keep_prob = tf.compat.v1.placeholder(tf.float32)
+    is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
+
+    logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
+                           crop, len(loader._mean), loader.num_classes, values[0])
+
+    pred_up = tf.argmax(logits, axis=3)
+
+    # restore
+    saver_restore = tf.compat.v1.train.Saver()
+
+    with tf.compat.v1.Session() as sess:
+        current_iter = int(former_model_path.split('-')[-1])
+        if 'dilated' in model_name:
+            patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
+            patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
+        # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
+        saver_restore.restore(sess, former_model_path)
+        print('Model restored from ' + former_model_path)
+
+        # Evaluate model
+        if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
+            crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
+                                               debug=True)
+        else:
+            crop_size = int(values[0])
+
+        print(" -- Time " + str(datetime.datetime.now().time()))
+
+        _, _, all_logits = validation(sess, model_name, loader, batch_size, x, y, crop,
+                                      keep_prob, is_training, pred_up, logits, current_iter, crop_size)
+
+        print(" -- Time " + str(datetime.datetime.now().time()))
+
+    tf.compat.v1.reset_default_graph()
 
 
 def main():
@@ -670,7 +710,7 @@ def main():
         os.makedirs(args.output_path)
     print(args)
 
-    if args.operation == 'training' or args.operation == 'generate_map':
+    if args.operation == 'training' or args.operation == 'generate_map' or args.operation == 'validation_cpu':
         if args.distribution_type == 'multi_fixed':
             patch_acc_loss = np.zeros(len(args.values), dtype=np.float32)
             patch_occur = np.zeros(len(args.values), dtype=np.int32)
@@ -722,6 +762,10 @@ def main():
             generate_final_maps(args.model_path, loader,
                                 args.batch_size, args.weight_decay, args.update_type,
                                 args.distribution_type, args.model_name, args.values, args.output_path)
+        elif args.operation == 'validation_cpu':
+            validation_cpu(args.model_path, loader,
+                           args.batch_size, args.weight_decay, args.update_type,
+                           args.distribution_type, args.model_name, args.values, args.output_path)
 
     elif args.operation == 'filter_results':
         try:

@@ -30,7 +30,6 @@ def split_train_test(model, data_distribution, limit=5050):
             if el[0] > limit:
                 test_distrib.append(el)
             else:
-                # if el[2][1] > 512:
                 train_distrib.append(el)
 
     return np.asarray(train_distrib), np.asarray(test_distrib)
