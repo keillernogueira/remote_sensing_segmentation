@@ -6,12 +6,16 @@ import datetime
 import numpy as np
 from sklearn.metrics import cohen_kappa_score
 from sklearn.metrics import f1_score
+from sklearn.metrics import jaccard_score
 
 import tensorflow as tf
 
 from config import *
 from utils import *
-from dataloaders.unique_image_loader import UniqueImageLoader
+
+from dataloaders.factory import dataloader_factory
+from dataloaders.utils import dynamically_create_patches, dynamically_create_patches_multi_images, normalize_images
+
 from networks.factory import model_factory
 from networks.loss import loss_def
 
@@ -299,7 +303,7 @@ from networks.loss import loss_def
 #
 #         tf.compat.v1.reset_default_graph()
 
-def validation(sess, model_name, loader, batch_size, x, y, crop,
+def validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
                keep_prob, is_training, pred_up, logits, step, crop_size):
     linear = np.arange(len(loader.test_distrib))
     all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
@@ -307,11 +311,18 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
-        test_patches, test_classes, test_masks = loader.dynamically_create_patches(model_name,
-                                                                                   loader.test_distrib[batch],
-                                                                                   crop_size, is_train=False)
+        if dataset == 'laranja':
+            test_patches, test_classes, test_masks = dynamically_create_patches(model_name, loader.data, loader.labels,
+                                                                                loader.test_distrib[batch], crop_size,
+                                                                                loader.num_classes, is_train=False)
+        elif dataset == 'arvore':
+            test_patches, test_classes, test_masks = \
+                dynamically_create_patches_multi_images(model_name, loader.test_data, loader.test_labels,
+                                                        loader.test_distrib[batch], crop_size, loader.num_classes,
+                                                        is_train=False, remove_negative=False)
+
         # print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
-        loader.normalize_images(test_patches)
+        normalize_images(test_patches, loader._mean, loader._std)
 
         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
         if model_name != 'pixelwise':
@@ -344,8 +355,13 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
         _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
         total += all_cm_test[i][i]
 
+    _sum_iou = (all_cm_test[1][1] / float(
+        np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1])
+                if (np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1]) != 0 else 0)
+
     cur_kappa = cohen_kappa_score(all_labels.flatten(), all_predcs.flatten())
     cur_f1 = f1_score(all_labels.flatten(), all_predcs.flatten(), average='macro')
+    # iou = jaccard_score(all_labels.flatten(), all_predcs.flatten())
 
     print("---- Iter " + str(step) +
           " -- Time " + str(datetime.datetime.now().time()) +
@@ -354,13 +370,14 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
           " Normalized Accuracy= " + "{:.6f}".format(_sum / float(loader.num_classes)) +
           " F1 Score= " + "{:.4f}".format(cur_f1) +
           " Kappa= " + "{:.4f}".format(cur_kappa) +
+          " IoU= " + "{:.4f}".format(_sum_iou) +
           " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
           )
 
     return all_predcs, all_labels, all_logits
 
 
-def train(loader, lr_initial, batch_size, niter,
+def train(dataset, loader, lr_initial, batch_size, niter,
           weight_decay, update_type, distribution_type, values,
           patch_acc_loss, patch_occur, patch_chosen_values, probs,
           output_path, model_name, former_model_path=None):
@@ -450,9 +467,17 @@ def train(loader, lr_initial, batch_size, niter,
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
 
-            b_x, b_y, b_mask = loader.dynamically_create_patches(model_name, loader.train_distrib[batch],
-                                                                 cur_patch_size, is_train=True)
-            loader.normalize_images(b_x)
+            if dataset == 'laranja':
+                b_x, b_y, b_mask = dynamically_create_patches(model_name, loader.data, loader.labels,
+                                                              loader.train_distrib[batch], cur_patch_size,
+                                                              loader.num_classes, is_train=True)
+            elif dataset == 'arvore':
+                b_x, b_y, b_mask = dynamically_create_patches_multi_images(model_name, loader.train_data,
+                                                                           loader.train_labels,
+                                                                           loader.train_distrib[batch], cur_patch_size,
+                                                                           loader.num_classes, is_train=True,
+                                                                           remove_negative=False)
+            normalize_images(b_x, loader._mean, loader._std)
 
             # print b_x.shape, b_y.shape, b_mask.shape
             batch_x = np.reshape(b_x, (-1, cur_patch_size * cur_patch_size * b_x.shape[-1]))
@@ -482,6 +507,7 @@ def train(loader, lr_initial, batch_size, niter,
                 print(batch_logits.shape, b_y.shape)
                 print(np.min(batch_logits), np.max(batch_logits))
                 print('-------------------------NaN-----------------------------------------------')
+                raise AssertionError
 
             if model_name == 'pixelwise':
                 acc, batch_cm_train = calc_accuracy_by_class(b_y, batch_pred_up, loader.num_classes, epoch_cm_train)
@@ -507,11 +533,17 @@ def train(loader, lr_initial, batch_size, niter,
                     _sum += (batch_cm_train[i][i] / float(np.sum(batch_cm_train[i]))
                              if np.sum(batch_cm_train[i]) != 0 else 0)
 
+                _sum_iou = (batch_cm_train[1][1] / float(
+                    np.sum(batch_cm_train[:, 1]) + np.sum(batch_cm_train[1]) - batch_cm_train[1][1])
+                            if (np.sum(batch_cm_train[:, 1]) + np.sum(batch_cm_train[1]) - batch_cm_train[1][1]) != 0
+                            else 0)
+
                 print("Iter " + str(step) + " -- Time " + str(datetime.datetime.now().time()) +
                       " -- Training Minibatch: Loss= " + "{:.6f}".format(batch_loss) +
                       " Absolut Right Pred= " + str(int(acc)) +
                       " Overall Accuracy= " + "{:.4f}".format(acc / float(np.sum(batch_cm_train))) +
                       " Normalized Accuracy= " + "{:.4f}".format(_sum / float(loader.num_classes)) +
+                      " IoU= " + "{:.4f}".format(_sum_iou) +
                       " Confusion Matrix= " + np.array_str(batch_cm_train).replace("\n", "")
                       )
 
@@ -544,7 +576,7 @@ def train(loader, lr_initial, batch_size, niter,
                 else:
                     cur_patch_val = int(values[0])
 
-                validation(sess, model_name, loader, batch_size, x, y, crop,
+                validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
                            keep_prob, is_training, pred, logits, step, cur_patch_val)
 
             # EPOCH IS COMPLETE
@@ -563,7 +595,7 @@ def train(loader, lr_initial, batch_size, niter,
                                                    patch_chosen_values, debug=True)
         else:
             cur_patch_val = int(values[0])
-        validation(sess, model_name, loader, batch_size, x, y, crop,
+        validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
                    keep_prob, is_training, pred, logits, step, cur_patch_val)
 
     tf.compat.v1.reset_default_graph()
@@ -680,11 +712,12 @@ def main():
                         help='Used to speed up the development process.')
 
     # dataset options
+    parser.add_argument('--dataset', type=str, help='Dataset [Options: laranja | maca].')
     parser.add_argument('--dataset_input_path', type=str, help='Dataset path.')
     parser.add_argument('--dataset_gt_path', type=str, help='Ground truth path.')
     parser.add_argument('--num_classes', type=int, help='Number of classes.')
-    parser.add_argument('--dataset_split_method', type=str, default='train_test',
-                        help='Split method the dataset [Options: train_test]')
+    # parser.add_argument('--dataset_split_method', type=str, default='train_test',
+    #                     help='Split method the dataset [Options: train_test]')
 
     # model options
     parser.add_argument('--model_name', type=str, default='dilated_grsl_rate8',
@@ -721,32 +754,12 @@ def main():
             patch_chosen_values = np.zeros(args.values[-1] - args.values[0] + 1, dtype=np.int32)
             probs = define_multinomial_probs(args.values)
 
-        loader = UniqueImageLoader(args.dataset_input_path, args.dataset_gt_path, args.num_classes, args.output_path,
-                                   args.simulate_dataset)
-        print(loader.data.shape, loader.labels.shape)
-        loader.split_dataset(args.model_name, args.reference_crop_size, args.reference_stride_crop,
-                             args.dataset_split_method)
-        print(len(loader.train_distrib), len(loader.test_distrib))
-        loader.create_or_load_mean(args.reference_crop_size, args.reference_stride_crop)
-
-        # patches, _, _ = loader.create_patches(loader.test_distrib, args.reference_crop_size, is_train=False)
-        # print(mask.shape, np.bincount(mask.flatten()))
-        # print(patches.shape)
-        # counter = 0
-        # total = 0
-        # n, h, w, c = patches.shape
-        # for i in range(n):
-        #     for j in range(h):
-        #         for k in range(w):
-        #             total += 1
-        #             if (patches[i, j, k] < 0).any():
-        #                 # print(i, j, patches[i, j, k])
-        #                 counter += 1
-        # print(counter, total)
-        # return
+        loader = dataloader_factory(args.dataset, args.dataset_input_path, args.dataset_gt_path, args.num_classes,
+                                    args.output_path, args.model_name, args.reference_crop_size,
+                                    args.reference_stride_crop, args.operation == 'training', args.simulate_dataset)
 
         if args.operation == 'training':
-            train(loader, args.learning_rate, args.batch_size, args.niter,
+            train(args.dataset, loader, args.learning_rate, args.batch_size, args.niter,
                   args.weight_decay, args.update_type, args.distribution_type, args.values,
                   (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
                   (None if args.distribution_type == 'single_fixed' else patch_occur),
