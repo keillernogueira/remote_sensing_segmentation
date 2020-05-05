@@ -11,11 +11,12 @@ from dataloaders.spliters import split_train_test
 
 class UniqueImageLoader:
 
-    def __init__(self, dataset_input_path, dataset_gt_path, num_classes, output_path,
+    def __init__(self, dataset, dataset_input_path, dataset_gt_path, num_classes, output_path,
                  model_name, reference_crop_size, reference_stride_crop,
                  simulate_images=False):
         super().__init__()
 
+        self.dataset = dataset
         self.dataset_input_path = dataset_input_path
         self.dataset_gt_path = dataset_gt_path
         self.num_classes = num_classes

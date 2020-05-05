@@ -6,11 +6,11 @@ def dataloader_factory(dataset, dataset_input_path, dataset_gt_path, num_classes
                        model_name, reference_crop_size, reference_stride_crop,
                        is_validation, simulate_dataset):
     if dataset == 'laranja':
-        return UniqueImageLoader(dataset_input_path, dataset_gt_path, num_classes, output_path,
+        return UniqueImageLoader(dataset, dataset_input_path, dataset_gt_path, num_classes, output_path,
                                  model_name, reference_crop_size, reference_stride_crop,
                                  simulate_dataset)
     elif dataset == 'arvore':
-        return TrainValTestLoader(dataset_input_path, num_classes, output_path,
+        return TrainValTestLoader(dataset, dataset_input_path, num_classes, output_path,
                                   model_name, reference_crop_size, reference_stride_crop,
                                   is_validation, simulate_dataset)
     else:

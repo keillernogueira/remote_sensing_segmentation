@@ -202,3 +202,38 @@ def calc_accuracy_by_class(true_crop, pred_crop, num_classes, track_conf_matrix)
         local_conf_matrix[true_crop[i]][pred_crop[i]] += 1
 
     return acc, local_conf_matrix
+
+
+def create_cm(true, pred):
+    conf_matrix = np.zeros((len(np.unique(true)), len(np.unique(true))), dtype=np.uint32)
+    c, h, w = true.shape
+    for i in range(c):
+        for j in range(h):
+            for k in range(w):
+                conf_matrix[true[i, j, k]][pred[i, j, k]] += 1
+
+    return conf_matrix
+
+
+def kappa_with_cm(conf_matrix):
+    acc = 0
+    marginal = 0
+    total = float(np.sum(conf_matrix))
+    for i in range(len(conf_matrix)):
+        acc += conf_matrix[i][i]
+        marginal += np.sum(conf_matrix, 0)[i] * np.sum(conf_matrix, 1)[i]
+
+    kappa = (total * acc - marginal) / (total * total - marginal)
+    return kappa
+
+
+def f1_with_cm(conf_matrix):
+    precision = [0] * len(conf_matrix)
+    recall = [0] * len(conf_matrix)
+    f1 = [0] * len(conf_matrix)
+    for i in range(len(conf_matrix)):
+        precision[i] = conf_matrix[i][i] / float(np.sum(conf_matrix, 0)[i])
+        recall[i] = conf_matrix[i][i] / float(np.sum(conf_matrix, 1)[i])
+        f1[i] = 2 * ((precision[i]*recall[i])/(precision[i]+recall[i]))
+
+    return np.mean(f1)

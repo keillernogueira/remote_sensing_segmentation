@@ -34,6 +34,8 @@ def model_factory(model_name, x, dropout, is_training, weight_decay, crop, num_i
 
     elif model_name == 'segnet':
         logits = segnet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size)
+    elif model_name == 'segnet_4':
+        logits = segnet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size)
 
     elif model_name == 'unet':
         logits = unet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size)

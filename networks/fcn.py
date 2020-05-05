@@ -372,4 +372,3 @@ def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_band
                             'upscore', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
 
     return upscore
-

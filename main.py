@@ -15,6 +15,8 @@ from utils import *
 
 from dataloaders.factory import dataloader_factory
 from dataloaders.utils import dynamically_create_patches, dynamically_create_patches_multi_images, normalize_images
+from dataloaders.unique_image_loader import UniqueImageLoader
+from dataloaders.train_validation_test_loader import TrainValTestLoader
 
 from networks.factory import model_factory
 from networks.loss import loss_def
@@ -303,22 +305,107 @@ from networks.loss import loss_def
 #
 #         tf.compat.v1.reset_default_graph()
 
-def validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
+
+# def validation_old(sess, model_name, loader, batch_size, x, y, crop,
+#                keep_prob, is_training, pred_up, logits, step, crop_size):
+#     linear = np.arange(len(loader.test_distrib))
+#     all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
+#     first = True
+#
+#     for i in range(0, math.ceil(len(linear) / batch_size)):
+#         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
+#         if isinstance(loader, UniqueImageLoader):
+#             test_patches, test_classes, test_masks = dynamically_create_patches(model_name, loader.data, loader.labels,
+#                                                                                 loader.test_distrib[batch], crop_size,
+#                                                                                 loader.num_classes, is_train=False)
+#         else:
+#             test_patches, test_classes, test_masks = \
+#                 dynamically_create_patches_multi_images(model_name, loader.test_data, loader.test_labels,
+#                                                         loader.test_distrib[batch], crop_size, loader.num_classes,
+#                                                         is_train=False, remove_negative=False)
+#
+#         # print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
+#         normalize_images(test_patches, loader._mean, loader._std)
+#
+#         bx = np.reshape(test_patches, (-1, crop_size * crop_size * test_patches.shape[-1]))
+#         if model_name != 'pixelwise':
+#             by = np.reshape(test_classes, (-1, crop_size * crop_size * 1))
+#         else:
+#             by = test_classes
+#
+#         _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size,
+#                                                                    keep_prob: 1., is_training: False})
+#
+#         if first is True:
+#             all_predcs = _pred_up
+#             all_labels = test_classes
+#             all_logits = _logits
+#             first = False
+#         else:
+#             all_predcs = np.concatenate((all_predcs, _pred_up))
+#             all_labels = np.concatenate((all_labels, test_classes))
+#             all_logits = np.concatenate((all_logits, _logits))
+#
+#     # print(len(loader.test_distrib), all_labels.shape, all_predcs.shape, all_logits.shape)
+#     if model_name == 'pixelwise':
+#         calc_accuracy_by_class(all_labels, all_predcs, loader.num_classes, all_cm_test)
+#     else:
+#         calc_accuracy_by_crop(all_labels, all_predcs, loader.num_classes, all_cm_test)
+#
+#     _sum = 0.0
+#     total = 0
+#     for i in range(len(all_cm_test)):
+#         _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
+#         total += all_cm_test[i][i]
+#
+#     _sum_iou = (all_cm_test[1][1] / float(
+#         np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1])
+#                 if (np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1]) != 0 else 0)
+#
+#     cur_kappa = cohen_kappa_score(all_labels.flatten(), all_predcs.flatten())
+#     cur_f1 = f1_score(all_labels.flatten(), all_predcs.flatten(), average='macro')
+#     # iou = jaccard_score(all_labels.flatten(), all_predcs.flatten())
+#
+#     print("---- Iter " + str(step) +
+#           " -- Time " + str(datetime.datetime.now().time()) +
+#           " -- Validation: Overall Accuracy= " + str(total) +
+#           " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
+#           " Normalized Accuracy= " + "{:.6f}".format(_sum / float(loader.num_classes)) +
+#           " F1 Score= " + "{:.4f}".format(cur_f1) +
+#           " Kappa= " + "{:.4f}".format(cur_kappa) +
+#           " IoU= " + "{:.4f}".format(_sum_iou) +
+#           " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
+#           )
+#
+#     return all_predcs, all_labels, all_logits
+
+
+def validation(sess, model_name, loader, batch_size, x, y, crop,
                keep_prob, is_training, pred_up, logits, step, crop_size):
     linear = np.arange(len(loader.test_distrib))
-    all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
-    first = True
+    # all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
+    # first = True
+
+    if isinstance(loader, UniqueImageLoader):
+        prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
+        occur_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
+    else:
+        prob_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
+                            loader.num_classes], dtype=np.float32)
+        occur_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
+                             loader.num_classes], dtype=np.float32)
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
-        if dataset == 'laranja':
+        index_batch = loader.test_distrib[batch]
+        if isinstance(loader, UniqueImageLoader):
             test_patches, test_classes, test_masks = dynamically_create_patches(model_name, loader.data, loader.labels,
-                                                                                loader.test_distrib[batch], crop_size,
+                                                                                index_batch, crop_size,
                                                                                 loader.num_classes, is_train=False)
-        elif dataset == 'arvore':
+        else:
             test_patches, test_classes, test_masks = \
                 dynamically_create_patches_multi_images(model_name, loader.test_data, loader.test_labels,
-                                                        loader.test_distrib[batch], crop_size, loader.num_classes,
+                                                        index_batch, crop_size, loader.num_classes,
                                                         is_train=False, remove_negative=False)
 
         # print(test_patches.shape, test_classes.shape, np.bincount(test_classes.flatten()))
@@ -333,51 +420,95 @@ def validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
         _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size,
                                                                    keep_prob: 1., is_training: False})
 
-        if first is True:
-            all_predcs = _pred_up
-            all_labels = test_classes
-            all_logits = _logits
-            first = False
-        else:
-            all_predcs = np.concatenate((all_predcs, _pred_up))
-            all_labels = np.concatenate((all_labels, test_classes))
-            all_logits = np.concatenate((all_logits, _logits))
+        # if first is True:
+        #     all_predcs = _pred_up
+        #     all_labels = test_classes
+        #     all_logits = _logits
+        #     first = False
+        # else:
+        #     all_predcs = np.concatenate((all_predcs, _pred_up))
+        #     all_labels = np.concatenate((all_labels, test_classes))
+        #     all_logits = np.concatenate((all_logits, _logits))
 
-    # print(len(loader.test_distrib), all_labels.shape, all_predcs.shape, all_logits.shape)
-    if model_name == 'pixelwise':
-        calc_accuracy_by_class(all_labels, all_predcs, loader.num_classes, all_cm_test)
-    else:
-        calc_accuracy_by_crop(all_labels, all_predcs, loader.num_classes, all_cm_test)
+        for j in range(len(index_batch)):
+            if isinstance(loader, UniqueImageLoader):
+                cur_x = index_batch[j][0]
+                cur_y = index_batch[j][1]
+                prob_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _logits[j, :, :, :]
+                occur_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
+            else:
+                cur_map = index_batch[j][0]
+                cur_x = index_batch[j][1]
+                cur_y = index_batch[j][2]
+                # print(index_batch.shape, index_batch[0],
+                #       prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :].shape,
+                #       _logits[j, :, :, :].shape, _logits.shape)
+                prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _logits[j, :, :, :]
+                occur_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
 
+    # if model_name == 'pixelwise':
+    #     calc_accuracy_by_class(all_labels, all_predcs, loader.num_classes, all_cm_test)
+    # else:
+    #     calc_accuracy_by_crop(all_labels, all_predcs, loader.num_classes, all_cm_test)
+    #
+    # _sum = 0.0
+    # total = 0
+    # for i in range(len(all_cm_test)):
+    #     _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
+    #     total += all_cm_test[i][i]
+    #
+    # _sum_iou = (all_cm_test[1][1] / float(
+    #     np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1])
+    #             if (np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1]) != 0 else 0)
+    #
+    # cur_kappa = cohen_kappa_score(all_labels.flatten(), all_predcs.flatten())
+    # cur_f1 = f1_score(all_labels.flatten(), all_predcs.flatten(), average='macro')
+    # # iou = jaccard_score(all_labels.flatten(), all_predcs.flatten())
+    #
+    # print("---- Iter " + str(step) +
+    #       " -- Time " + str(datetime.datetime.now().time()) +
+    #       " -- Validation: Overall Accuracy= " + str(total) +
+    #       " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
+    #       " Normalized Accuracy= " + "{:.6f}".format(_sum / float(loader.num_classes)) +
+    #       " F1 Score= " + "{:.4f}".format(cur_f1) +
+    #       " Kappa= " + "{:.4f}".format(cur_kappa) +
+    #       " IoU= " + "{:.4f}".format(_sum_iou) +
+    #       " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
+    #       )
+
+    occur_im[np.where(occur_im == 0)] = 1
+    prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=-1)
+
+    all_cm_test2 = create_cm(loader.labels if isinstance(loader, UniqueImageLoader) else loader.test_labels,
+                             prob_im_argmax)
     _sum = 0.0
     total = 0
-    for i in range(len(all_cm_test)):
-        _sum += (all_cm_test[i][i] / float(np.sum(all_cm_test[i])) if np.sum(all_cm_test[i]) != 0 else 0)
-        total += all_cm_test[i][i]
+    for i in range(len(all_cm_test2)):
+        _sum += (all_cm_test2[i][i] / float(np.sum(all_cm_test2[i])) if np.sum(all_cm_test2[i]) != 0 else 0)
+        total += all_cm_test2[i][i]
 
-    _sum_iou = (all_cm_test[1][1] / float(
-        np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1])
-                if (np.sum(all_cm_test[:, 1]) + np.sum(all_cm_test[1]) - all_cm_test[1][1]) != 0 else 0)
+    _sum_iou = (all_cm_test2[1][1] / float(
+        np.sum(all_cm_test2[:, 1]) + np.sum(all_cm_test2[1]) - all_cm_test2[1][1])
+                if (np.sum(all_cm_test2[:, 1]) + np.sum(all_cm_test2[1]) - all_cm_test2[1][1]) != 0 else 0)
 
-    cur_kappa = cohen_kappa_score(all_labels.flatten(), all_predcs.flatten())
-    cur_f1 = f1_score(all_labels.flatten(), all_predcs.flatten(), average='macro')
-    # iou = jaccard_score(all_labels.flatten(), all_predcs.flatten())
+    kappa_cm = kappa_with_cm(all_cm_test2)
+    f1_cm = f1_with_cm(all_cm_test2)
 
     print("---- Iter " + str(step) +
           " -- Time " + str(datetime.datetime.now().time()) +
           " -- Validation: Overall Accuracy= " + str(total) +
-          " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test))) +
+          " Overall Accuracy= " + "{:.6f}".format(total / float(np.sum(all_cm_test2))) +
           " Normalized Accuracy= " + "{:.6f}".format(_sum / float(loader.num_classes)) +
-          " F1 Score= " + "{:.4f}".format(cur_f1) +
-          " Kappa= " + "{:.4f}".format(cur_kappa) +
+          " F1 Score= " + "{:.4f}".format(f1_cm) +
+          " Kappa= " + "{:.4f}".format(kappa_cm) +
           " IoU= " + "{:.4f}".format(_sum_iou) +
-          " Confusion Matrix= " + np.array_str(all_cm_test).replace("\n", "")
+          " Confusion Matrix= " + np.array_str(all_cm_test2).replace("\n", "")
           )
 
-    return all_predcs, all_labels, all_logits
+    return prob_im_argmax
 
 
-def train(dataset, loader, lr_initial, batch_size, niter,
+def train(loader, lr_initial, batch_size, niter,
           weight_decay, update_type, distribution_type, values,
           patch_acc_loss, patch_occur, patch_chosen_values, probs,
           output_path, model_name, former_model_path=None):
@@ -467,11 +598,11 @@ def train(dataset, loader, lr_initial, batch_size, niter,
             # print 'new batch of crop size == ', cur_patch_size
             shuffle, batch, it = select_batch(shuffle, batch_size, it, total_length)
 
-            if dataset == 'laranja':
+            if isinstance(loader, UniqueImageLoader):
                 b_x, b_y, b_mask = dynamically_create_patches(model_name, loader.data, loader.labels,
                                                               loader.train_distrib[batch], cur_patch_size,
                                                               loader.num_classes, is_train=True)
-            elif dataset == 'arvore':
+            elif isinstance(loader, TrainValTestLoader):
                 b_x, b_y, b_mask = dynamically_create_patches_multi_images(model_name, loader.train_data,
                                                                            loader.train_labels,
                                                                            loader.train_distrib[batch], cur_patch_size,
@@ -576,7 +707,7 @@ def train(dataset, loader, lr_initial, batch_size, niter,
                 else:
                     cur_patch_val = int(values[0])
 
-                validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
+                validation(sess, model_name, loader, batch_size, x, y, crop,
                            keep_prob, is_training, pred, logits, step, cur_patch_val)
 
             # EPOCH IS COMPLETE
@@ -595,7 +726,7 @@ def train(dataset, loader, lr_initial, batch_size, niter,
                                                    patch_chosen_values, debug=True)
         else:
             cur_patch_val = int(values[0])
-        validation(sess, model_name, dataset, loader, batch_size, x, y, crop,
+        validation(sess, model_name, loader, batch_size, x, y, crop,
                    keep_prob, is_training, pred, logits, step, cur_patch_val)
 
     tf.compat.v1.reset_default_graph()
@@ -636,67 +767,23 @@ def generate_final_maps(former_model_path, loader,
             crop_size = int(values[0])
         # stride_crop = int(math.floor(crop_size / 2.0))
 
-        _, _, all_logits = validation(sess, model_name, loader, batch_size, x, y, crop,
-                                      keep_prob, is_training, pred_up, logits, current_iter, crop_size)
+        print(" -- Time " + str(datetime.datetime.now().time()))
+        prob_im_argmax = validation(sess, model_name, loader, batch_size, x, y, crop,
+                                    keep_prob, is_training, pred_up, logits, current_iter, crop_size)
+        print(" -- Time " + str(datetime.datetime.now().time()))
 
-        prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
-        occur_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
-        for i in range(len(loader.test_distrib)):
-            cur_x = loader.test_distrib[i][0]
-            cur_y = loader.test_distrib[i][1]
-            prob_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += all_logits[i, :, :, :]
-            occur_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
-
-        occur_im[np.where(occur_im == 0)] = 1
-        # np.save(output_path + 'prob_map' + str(testing_instances[k]) + '.npy', prob_im/occur_im.astype(float))
-        prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=2)
-
-        create_prediction_map(output_path + os.listdir(loader.dataset_input_path)[0].split('_')[0] +
-                              '_prediction', prob_im_argmax)
-
-    tf.compat.v1.reset_default_graph()
-
-
-def validation_cpu(former_model_path, loader,
-                   batch_size, weight_decay,
-                   update_type, distribution_type, model_name, values, output_path):
-    # PLACEHOLDERS
-    crop = tf.compat.v1.placeholder(tf.int32)
-    x = tf.compat.v1.placeholder(tf.float32, [None, None])
-    y = tf.compat.v1.placeholder(tf.float32, [None, None])
-    keep_prob = tf.compat.v1.placeholder(tf.float32)
-    is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
-
-    logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
-                           crop, len(loader._mean), loader.num_classes, values[0])
-
-    pred_up = tf.argmax(logits, axis=3)
-
-    # restore
-    saver_restore = tf.compat.v1.train.Saver()
-
-    with tf.compat.v1.Session() as sess:
-        current_iter = int(former_model_path.split('-')[-1])
-        if 'dilated' in model_name:
-            patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
-            patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
-        # patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
-        saver_restore.restore(sess, former_model_path)
-        print('Model restored from ' + former_model_path)
-
-        # Evaluate model
-        if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
-            crop_size = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
-                                               debug=True)
+        if isinstance(loader, UniqueImageLoader):
+            create_prediction_map(os.path.join(output_path,
+                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_prediction'),
+                                  prob_im_argmax)
         else:
-            crop_size = int(values[0])
-
-        print(" -- Time " + str(datetime.datetime.now().time()))
-
-        _, _, all_logits = validation(sess, model_name, loader, batch_size, x, y, crop,
-                                      keep_prob, is_training, pred_up, logits, current_iter, crop_size)
-
-        print(" -- Time " + str(datetime.datetime.now().time()))
+            for i, m in enumerate(prob_im_argmax):
+                create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                                                   '_prediction'), m)
+                # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                #                                    '_mask'), loader.test_labels[i])
+                # imageio.imwrite(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                #                              '_resave.png'), loader.test_data[i])
 
     tf.compat.v1.reset_default_graph()
 
@@ -743,7 +830,7 @@ def main():
         os.makedirs(args.output_path)
     print(args)
 
-    if args.operation == 'training' or args.operation == 'generate_map' or args.operation == 'validation_cpu':
+    if args.operation == 'training' or args.operation == 'generate_map':
         if args.distribution_type == 'multi_fixed':
             patch_acc_loss = np.zeros(len(args.values), dtype=np.float32)
             patch_occur = np.zeros(len(args.values), dtype=np.int32)
@@ -759,7 +846,7 @@ def main():
                                     args.reference_stride_crop, args.operation == 'training', args.simulate_dataset)
 
         if args.operation == 'training':
-            train(args.dataset, loader, args.learning_rate, args.batch_size, args.niter,
+            train(loader, args.learning_rate, args.batch_size, args.niter,
                   args.weight_decay, args.update_type, args.distribution_type, args.values,
                   (None if args.distribution_type == 'single_fixed' else patch_acc_loss),
                   (None if args.distribution_type == 'single_fixed' else patch_occur),
@@ -775,10 +862,6 @@ def main():
             generate_final_maps(args.model_path, loader,
                                 args.batch_size, args.weight_decay, args.update_type,
                                 args.distribution_type, args.model_name, args.values, args.output_path)
-        elif args.operation == 'validation_cpu':
-            validation_cpu(args.model_path, loader,
-                           args.batch_size, args.weight_decay, args.update_type,
-                           args.distribution_type, args.model_name, args.values, args.output_path)
 
     elif args.operation == 'filter_results':
         try:

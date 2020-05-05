@@ -10,11 +10,12 @@ from dataloaders.utils import create_or_load_mean, create_distrib_multi_images
 
 class TrainValTestLoader:
 
-    def __init__(self, dataset_input_path, num_classes, output_path,
+    def __init__(self, dataset, dataset_input_path, num_classes, output_path,
                  model, reference_crop_size, reference_stride_crop,
                  is_validation, simulate_images=False):
         super().__init__()
 
+        self.dataset = dataset
         self.dataset_input_path = dataset_input_path
 
         self.num_classes = num_classes
@@ -29,9 +30,10 @@ class TrainValTestLoader:
         self.train_distrib = None
         self.test_distrib = None
 
-        self.train_data, self.train_labels = self.load_images('train', simulate_images=simulate_images)
-        self.test_data, self.test_labels = self.load_images(('validation' if is_validation else 'test'),
-                                                            simulate_images=simulate_images)
+        self.train_data, self.train_labels, _ = self.load_images('train', simulate_images=simulate_images)
+        self.test_data, self.test_labels, self.test_name = self.load_images(('validation' if is_validation else 'test'),
+                                                                            simulate_images=simulate_images)
+
         print(self.train_data.shape, self.train_labels.shape)
         print(self.test_data.shape, self.test_labels.shape)
         self.train_distrib = create_distrib_multi_images(self.train_labels, model, self.reference_crop_size,
@@ -44,8 +46,10 @@ class TrainValTestLoader:
                                                     self.output_path)
 
     def load_images(self, stage, simulate_images=False):
+        print(stage)
         images = []
         masks = []
+        names = []
 
         if simulate_images is True:
             mask = np.random.rand(580, 256, 256, 3)
@@ -53,6 +57,8 @@ class TrainValTestLoader:
             return np.asarray(images), np.asarray(mask)
 
         for f in os.listdir(os.path.join(self.dataset_input_path, stage, 'images')):
+            names.append(f)
+
             # print(os.path.join(self.dataset_input_path, stage, 'images', f))
             image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, stage, 'images', f)))
             images.append(image)
@@ -61,4 +67,4 @@ class TrainValTestLoader:
             mask = (imageio.imread(os.path.join(self.dataset_input_path, stage, 'labels', f))/255).astype(int)
             masks.append(mask)
 
-        return np.asarray(images), np.asarray(masks)
+        return np.asarray(images), np.asarray(masks), np.asarray(names)
