@@ -4,6 +4,7 @@ import numpy as np
 import imageio
 
 from skimage import img_as_float
+from skimage.morphology import dilation, disk
 
 from dataloaders.utils import create_or_load_mean, create_distrib_multi_images
 
@@ -30,9 +31,17 @@ class TrainValTestLoader:
         self.train_distrib = None
         self.test_distrib = None
 
-        self.train_data, self.train_labels, _ = self.load_images('train', simulate_images=simulate_images)
-        self.test_data, self.test_labels, self.test_name = self.load_images(('validation' if is_validation else 'test'),
-                                                                            simulate_images=simulate_images)
+        if dataset == 'arvore':
+            self.train_data, self.train_labels, _ = self.load_images('train', simulate_images=simulate_images)
+            self.test_data, self.test_labels, self.test_name = self.load_images(
+                ('validation' if is_validation else 'test'),
+                simulate_images=simulate_images)
+        elif dataset == 'road_detection':
+            self.train_data, self.train_labels, _ = self.load_images_road(['2', '3'], simulate_images=simulate_images)
+            self.test_data, self.test_labels, self.test_name = self.load_images_road(['4'],
+                                                                                     simulate_images=simulate_images)
+        else:
+            raise NotImplementedError('DataLoader not identified: ' + dataset)
 
         print(self.train_data.shape, self.train_labels.shape)
         print(self.test_data.shape, self.test_labels.shape)
@@ -65,6 +74,30 @@ class TrainValTestLoader:
 
             # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
             mask = (imageio.imread(os.path.join(self.dataset_input_path, stage, 'labels', f))/255).astype(int)
+            masks.append(mask)
+
+        return np.asarray(images), np.asarray(masks), np.asarray(names)
+
+    def load_images_road(self, areas, simulate_images=False):
+        images = []
+        masks = []
+        names = []
+
+        if simulate_images is True:
+            mask = np.random.rand(580, 256, 256, 3)
+            images = np.random.rand(580, 256, 256, 3)
+            return np.asarray(images), np.asarray(mask)
+
+        for i, area in enumerate(areas):
+            names.append('area' + area)
+
+            # print(os.path.join(self.dataset_input_path, stage, 'images', f))
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area', area + '.tif')))
+            images.append(image)
+
+            # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
+            mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area', area + '_mask.tif'))).astype(int)
+            mask = dilation(mask, disk(3))  # used to enlarge the road annotations
             masks.append(mask)
 
         return np.asarray(images), np.asarray(masks), np.asarray(names)

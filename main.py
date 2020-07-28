@@ -385,6 +385,7 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
     linear = np.arange(len(loader.test_distrib))
     # all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
     # first = True
+    crop_size = 256
 
     if isinstance(loader, UniqueImageLoader):
         prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
@@ -443,6 +444,16 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
                 # print(index_batch.shape, index_batch[0],
                 #       prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :].shape,
                 #       _logits[j, :, :, :].shape, _logits.shape)
+
+                temp_patch = prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :]
+                if len(temp_patch) != crop_size and len(temp_patch[0]) != crop_size:
+                    cur_x = cur_x - (crop_size - len(temp_patch))
+                    cur_y = cur_y - (crop_size - len(temp_patch[0]))
+                elif len(temp_patch) != crop_size:
+                    cur_x = cur_x - (crop_size - len(temp_patch))
+                elif len(temp_patch[0]) != crop_size:
+                    cur_y = cur_y - (crop_size - len(temp_patch[0]))
+
                 prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _logits[j, :, :, :]
                 occur_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
 
@@ -564,9 +575,10 @@ def train(loader, lr_initial, batch_size, niter,
         if former_model_path is not None and 'model' in former_model_path:
             current_iter = int(former_model_path.split('-')[-1])
             print('Model restored from ' + former_model_path)
-            patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
-            patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
-            patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
+            if 'dilated' in model_name:
+                patch_acc_loss = np.load(output_path + 'patch_acc_loss_step_' + str(current_iter) + '.npy')
+                patch_occur = np.load(output_path + 'patch_occur_step_' + str(current_iter) + '.npy')
+                patch_chosen_values = np.load(output_path + 'patch_chosen_values_step_' + str(current_iter) + '.npy')
             saver_restore.restore(sess, former_model_path)
             current_iter = current_iter + 1
         else:
@@ -799,7 +811,7 @@ def main():
                         help='Used to speed up the development process.')
 
     # dataset options
-    parser.add_argument('--dataset', type=str, help='Dataset [Options: laranja | maca].')
+    parser.add_argument('--dataset', type=str, help='Dataset [Options: laranja | arvore | road_detection].')
     parser.add_argument('--dataset_input_path', type=str, help='Dataset path.')
     parser.add_argument('--dataset_gt_path', type=str, help='Ground truth path.')
     parser.add_argument('--num_classes', type=int, help='Number of classes.')
