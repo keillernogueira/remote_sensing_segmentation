@@ -34,8 +34,7 @@ class TrainValTestLoader:
         if dataset == 'arvore':
             self.train_data, self.train_labels, _ = self.load_images('train', simulate_images=simulate_images)
             self.test_data, self.test_labels, self.test_name = self.load_images(
-                ('validation' if is_validation else 'test'),
-                simulate_images=simulate_images)
+                ('validation' if is_validation else 'test'), simulate_images=simulate_images)
         elif dataset == 'road_detection':
             self.train_data, self.train_labels, _ = self.load_images_road(['2', '3'], simulate_images=simulate_images)
             self.test_data, self.test_labels, self.test_name = self.load_images_road(['4'],
@@ -92,11 +91,11 @@ class TrainValTestLoader:
             names.append('area' + area)
 
             # print(os.path.join(self.dataset_input_path, stage, 'images', f))
-            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area', area + '.tif')))
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '.tif')))
             images.append(image)
 
             # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
-            mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area', area + '_mask.tif'))).astype(int)
+            mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_mask.tif'))).astype(int)
             mask = dilation(mask, disk(3))  # used to enlarge the road annotations
             masks.append(mask)
 
