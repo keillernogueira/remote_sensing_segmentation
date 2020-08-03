@@ -385,7 +385,6 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
     linear = np.arange(len(loader.test_distrib))
     # all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
     # first = True
-    crop_size = 256
 
     if isinstance(loader, UniqueImageLoader):
         prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)

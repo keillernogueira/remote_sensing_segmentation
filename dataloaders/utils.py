@@ -4,7 +4,7 @@ import scipy
 import numpy as np
 
 
-def create_distrib_multi_images(labels, model, crop_size, stride_size, num_classes):
+def create_distrib_multi_images(labels, model, crop_size, stride_size, num_classes, filtering_non_classes=False):
     classes = []
     counter = num_classes * [0]
 
@@ -33,19 +33,20 @@ def create_distrib_multi_images(labels, model, crop_size, stride_size, num_class
                                                                     "Current patch size is " + str(len(patch_class)) + \
                                                                     "x" + str(len(patch_class[0]))
 
-                count = np.bincount(patch_class.astype(int).flatten())
-                if len(count) == 2:
-                    if model != 'pixelwise':
+                if model == 'pixelwise':
+                    _cl = labels[cur_map, cur_x + int(crop_size / 2) - 1, cur_x + int(crop_size / 2) - 1]
+                    # print('c', crop_size, cur_x, cur_y, _cl)
+                    classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                    counter[_cl] += 1
+                else:
+                    count = np.bincount(patch_class.astype(int).flatten())
+                    if len(count) == 2 and count[1] > 0.25 * count[0]:
                         classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
                         counter[1] += 1
                     else:
-                        _cl = labels[cur_map, cur_x + int(crop_size/2) - 1, cur_x + int(crop_size/2) - 1]
-                        # print('c', crop_size, cur_x, cur_y, _cl)
-                        classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
-                        counter[_cl] += 1
-                else:
-                    classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
-                    counter[0] += 1
+                        if filtering_non_classes is False or (filtering_non_classes is True and random.random() > 0.7):
+                            classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                            counter[0] += 1
 
     for i in range(len(counter)):
         print('Class ' + str(i + 1) + ' has length ' + str(counter[i]))
