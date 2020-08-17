@@ -8,7 +8,7 @@ import tensorflow as tf
 
 # https://github.com/jakeret/tf_unet/blob/master/tf_unet/unet.py
 # https://github.com/zhulf0804/UNet-Tensorflow/blob/master/networks/unet.py
-def unet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size):
+def unet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):
     x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
 
     conv1_1 = _conv_layer(x, [3, 3, num_input_bands, 64], "conv1_1", weight_decay, is_training,
@@ -83,7 +83,7 @@ def unet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_class
     return conv_classifier
 
 
-def unet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size):
+def unet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):
     x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
 
     conv1_1 = _conv_layer(x, [3, 3, num_input_bands, 64], "conv1_1", weight_decay, is_training,

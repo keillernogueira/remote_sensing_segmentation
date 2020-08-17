@@ -48,7 +48,7 @@ def atrous_spatial_pyramid_pooling(inputs, atrous_rates, weight_decay, is_traini
         return net
 
 
-def deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size):
+def deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
     conv1_1 = _conv_layer(x, [3, 3, num_input_bands, 64], 'conv1_1', weight_decay, is_training, batch_norm=True)
@@ -90,4 +90,8 @@ def deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_cl
             # net = layers_lib.conv2d(net, num_classes, [1, 1], activation_fn=None, normalizer_fn=None, scope='conv_1x1')
             logits = tf.image.resize_bilinear(net, tf.shape(x)[1:3], name='upsample_2')
 
-    return logits
+    if extract_features is True:
+        return tf.image.resize_bilinear(encoder_output, tf.shape(x)[1:3]), \
+               tf.image.resize_bilinear(low_level_features, tf.shape(x)[1:3]), logits
+    else:
+        return logits

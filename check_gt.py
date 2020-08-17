@@ -30,10 +30,10 @@ def main():
 
     h, w = img.shape
     x, y = np.where(img == 1)
-
     print(x.shape, y.shape)
 
-    heat_map = get_heatmap(x, y, h, w, sigma=1.0)
+    heat_map = get_heatmap(x, y, h, w, sigma=8.0)
+    print(np.min(heat_map), np.max(heat_map), heat_map.shape)
     imageio.imwrite(args.output, heat_map)
 
 

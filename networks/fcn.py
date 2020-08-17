@@ -3,7 +3,7 @@ from networks.layers import _conv_layer, _max_pool, _deconv_layer
 import tensorflow as tf
 
 
-def fcn_25_1_4x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_25_1_4x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
@@ -47,7 +47,7 @@ def fcn_25_1_4x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     return upscore3
 
 
-def fcn_25_2_2x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_25_2_2x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
     # print x.get_shape()
@@ -107,7 +107,7 @@ def fcn_25_2_2x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     return upscore3
 
 
-def fcn_25_3_2x_icpr(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_25_3_2x_icpr(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
     # print x.get_shape()
@@ -183,7 +183,7 @@ def fcn_25_3_2x_icpr(x, dropout, is_training, crop_size, weight_decay, num_input
     return upscore
 
 
-def fcn_50_1_8x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_50_1_8x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
     # print x.get_shape()
@@ -231,7 +231,7 @@ def fcn_50_1_8x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     return upscore
 
 
-def fcn_50_2_4x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_50_2_4x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, is_training, crop_size, crop_size, num_input_bands])
     # print x.get_shape()
@@ -295,7 +295,7 @@ def fcn_50_2_4x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     return upscore
 
 
-def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes):
+def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_bands, num_classes, extract_features):
     # Reshape input picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 

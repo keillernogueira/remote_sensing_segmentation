@@ -7,7 +7,7 @@ import tensorflow as tf
 
 
 # https://github.com/toimcio/SegNet-tensorflow/blob/master/SegNet.py
-def segnet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size):
+def segnet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):
     x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
     batch_size = tf.shape(x)[0]
 
@@ -69,7 +69,7 @@ def segnet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_cla
     return conv_classifier
 
 
-def segnet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size):
+def segnet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):
     x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
     batch_size = tf.shape(x)[0]
 

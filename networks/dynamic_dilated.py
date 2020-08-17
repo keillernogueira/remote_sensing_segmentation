@@ -3,7 +3,8 @@ from networks.layers import _conv_layer, _max_pool, _variable_with_weight_decay,
 import tensorflow as tf
 
 
-def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, batch_norm=True):
+def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, num_input_bands, num_classes,
+                       extract_features, batch_norm=True):
     # Reshape input_data picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
@@ -37,7 +38,8 @@ def dilated_icpr_rate6(x, is_training, weight_decay, crop_size, num_input_bands,
     return conv_classifier
 
 
-def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, batch_norm=True):
+def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, num_input_bands, num_classes,
+                               extract_features, batch_norm=True):
     # Reshape input_data picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
@@ -91,7 +93,7 @@ def dilated_icpr_rate6_densely(x, is_training, weight_decay, crop_size, num_inpu
     return conv_classifier
 
 
-def dilated_grsl(x, is_training, weight_decay, crop_size, num_input_bands, num_classes):
+def dilated_grsl(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, extract_features):
     # Reshape input_data picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 
@@ -131,7 +133,7 @@ def dilated_grsl(x, is_training, weight_decay, crop_size, num_input_bands, num_c
     return conv_classifier
 
 
-def dilated_grsl_rate8(x, is_training, weight_decay, crop_size, num_input_bands, num_classes):
+def dilated_grsl_rate8(x, is_training, weight_decay, crop_size, num_input_bands, num_classes, extract_features):
     # Reshape input_data picture
     x = tf.reshape(x, shape=[-1, crop_size, crop_size, num_input_bands])
 

@@ -3,7 +3,7 @@ from networks.layers import _conv_layer, _max_pool, _fc_layer, _variable_with_we
 import tensorflow as tf
 
 
-def pixelwise(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes):
+def pixelwise(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, extract_features):
     x = tf.reshape(x, shape=[-1, crop, crop, num_input_bands])
 
     conv1 = _conv_layer(x, [5, 5, num_input_bands, 64], "conv1", weight_decay, is_training, batch_norm=True)
