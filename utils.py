@@ -2,6 +2,7 @@ import random
 import numpy as np
 import imageio
 import argparse
+import matplotlib.pyplot as plt
 
 
 def str2bool(v):
@@ -159,16 +160,15 @@ def select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occu
         return cur_patch_val
 
 
-def create_prediction_map(img_name, prob_img):
-    # im_array = np.empty([prob_img.shape[0], prob_img.shape[1], 3], dtype=np.uint8)
-    #
-    # for i in range(prob_img.shape[0]):
-    #     for j in range(prob_img.shape[1]):
-    #         im_array[i, j] = int(prob_img[i, j])
-
-    imageio.imwrite(img_name + '.png', prob_img.astype(np.uint8) * 255)
-    # img = Image.fromarray(prob_img.astype(np.uint8) * 255)
-    # img.save(img_name + ".tif")
+def create_prediction_map(img_name, prob_img, channels=False):
+    if channels is True:
+        for i in range(prob_img.shape[-1]):
+            # imageio.imwrite(img_name + 'feat_' + str(i) + '.png', prob_img[:, :, i].astype(np.uint8))
+            plt.imsave(img_name + 'feat_' + str(i) + '.png', prob_img[:, :, i], cmap=plt.cm.jet)
+    else:
+        imageio.imwrite(img_name + '.png', prob_img.astype(np.uint8) * 255)
+        # img = Image.fromarray(prob_img.astype(np.uint8) * 255)
+        # img.save(img_name + ".tif")
 
 
 def calc_accuracy_by_crop(true_crop, pred_crop, num_classes, track_conf_matrix, masks=None):

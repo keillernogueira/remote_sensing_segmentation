@@ -390,8 +390,8 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
         prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
         occur_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
         if feat1 is not None:
-            feat1_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
-            feat2_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
+            feat1_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], 256], dtype=np.float32)
+            feat2_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], 256], dtype=np.float32)
     else:
         prob_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
                             loader.num_classes], dtype=np.float32)
@@ -399,9 +399,9 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
                              loader.num_classes], dtype=np.float32)
         if feat1 is not None:
             feat1_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
-                                 loader.num_classes], dtype=np.float32)
+                                 256], dtype=np.float32)
             feat2_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
-                                 loader.num_classes], dtype=np.float32)
+                                 256], dtype=np.float32)
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
@@ -508,8 +508,8 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
     occur_im[np.where(occur_im == 0)] = 1
     prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=-1)
     if feat1 is not None:
-        feat1_im_n = feat1_im / occur_im.astype(float)
-        feat2_im_n = feat2_im / occur_im.astype(float)
+        feat1_im_n = feat1_im / np.repeat(occur_im.astype(float), 128, axis=-1)
+        feat2_im_n = feat2_im / np.repeat(occur_im.astype(float), 128, axis=-1)
 
     all_cm_test2 = create_cm(loader.labels if isinstance(loader, UniqueImageLoader) else loader.test_labels,
                              prob_im_argmax)
@@ -803,7 +803,7 @@ def generate_final_maps(former_model_path, loader,
         # stride_crop = int(math.floor(crop_size / 2.0))
 
         print(" -- Time " + str(datetime.datetime.now().time()))
-        feat1_out, feat2_out, prob_im_argmax = validation(sess, model_name, loader, batch_size, x, y, crop, keep_prob,
+        prob_im_argmax, feat1_out, feat2_out = validation(sess, model_name, loader, batch_size, x, y, crop, keep_prob,
                                                           is_training, pred_up, logits, current_iter,
                                                           crop_size, feat1, feat2)
         print(" -- Time " + str(datetime.datetime.now().time()))
@@ -813,17 +813,19 @@ def generate_final_maps(former_model_path, loader,
                                   os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_prediction'),
                                   prob_im_argmax)
             create_prediction_map(os.path.join(output_path,
-                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat1'), feat1_out)
+                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat1'),
+                                  feat1_out, channels=True)
             create_prediction_map(os.path.join(output_path,
-                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat2'), feat2_out)
+                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat2'),
+                                  feat2_out, channels=True)
         else:
             for i, m in enumerate(prob_im_argmax):
                 create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
                                                    '_prediction'), m)
                 create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                   '_feat1'), feat1_out)
+                                                   '_feat1'), feat1_out[i], channels=True)
                 create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                   '_feat2'), feat2_out)
+                                                   '_feat2'), feat2_out[i], channels=True)
                 # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
                 #                                    '_mask'), loader.test_labels[i])
                 # imageio.imwrite(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +

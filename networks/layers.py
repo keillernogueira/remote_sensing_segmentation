@@ -118,6 +118,8 @@ def _conv_layer(input_data, layer_shape, name, weight_decay, is_training, rate=1
         if has_activation is True:
             if activation == 'relu':
                 conv_act = tf.nn.relu(conv_act, name=name)
+            elif activation == 'elu':
+                conv_act = tf.nn.elu(conv_act, name=name)
             else:
                 conv_act = leaky_relu(conv_act)
 

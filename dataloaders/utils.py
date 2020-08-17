@@ -41,22 +41,21 @@ def create_distrib_multi_images(labels, model, crop_size, stride_size, num_class
                     counter[_cl] += 1
                 else:
                     count = np.bincount(patch_class.astype(int).flatten())
-                    if dataset == 'arvore':
+                    if dataset == 'road_detection' and filtering_non_classes is True:
+                        if len(count) == 2:
+                            if count[1] > 0.10 * count[0]:
+                                classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                                counter[1] += 1
+                            elif random.random() > 0.8:
+                                    classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                                    counter[0] += 1
+                    else:
                         if len(count) == 2:
                             classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
                             counter[1] += 1
                         else:
                             classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
                             counter[0] += 1
-                    elif dataset == 'road_detection':
-                        if len(count) == 2:
-                            if count[1] > 0.10 * count[0]:
-                                classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
-                                counter[1] += 1
-                            else:
-                                if filtering_non_classes is False or (filtering_non_classes is True and random.random() > 0.8):
-                                    classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
-                                    counter[0] += 1
 
     for i in range(len(counter)):
         print('Class ' + str(i) + ' has length ' + str(counter[i]))
