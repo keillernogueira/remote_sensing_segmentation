@@ -24,15 +24,15 @@ def atrous_spatial_pyramid_pooling(inputs, atrous_rates, weight_decay, is_traini
 
         # (a) one 1x1 convolution and three 3x3 convolutions with rates = (6, 12, 18) when output stride = 16.
         # the rates are doubled when output stride = 8.
-        conv_1x1 = _conv_layer(inputs, [1, 1, 1024, 1024], "aspp_conv_1x1", is_training=is_training, strides=[1, 1, 1, 1],
-                               weight_decay=weight_decay)
-        conv_3x3_1 = _conv_layer(inputs, [3, 3, 1024, 1024], "aspp_conv_3x3_1", is_training=is_training,
+        conv_1x1 = _conv_layer(inputs, [1, 1, 512, 256], "aspp_conv_1x1",
+                               is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
+        conv_3x3_1 = _conv_layer(inputs, [3, 3, 512, 256], "aspp_conv_3x3_1", is_training=is_training,
                                  strides=[1, 1, 1, 1], rate=atrous_rates[0], is_normal_conv=False,
                                  weight_decay=weight_decay)
-        conv_3x3_2 = _conv_layer(inputs, [3, 3, 1024, 1024], "aspp_conv_3x3_2", is_training=is_training,
+        conv_3x3_2 = _conv_layer(inputs, [3, 3, 512, 256], "aspp_conv_3x3_2", is_training=is_training,
                                  strides=[1, 1, 1, 1], rate=atrous_rates[1], is_normal_conv=False,
                                  weight_decay=weight_decay)
-        conv_3x3_3 = _conv_layer(inputs, [3, 3, 1024, 1024], "aspp_conv_3x3_3", is_training=is_training,
+        conv_3x3_3 = _conv_layer(inputs, [3, 3, 512, 256], "aspp_conv_3x3_3", is_training=is_training,
                                  strides=[1, 1, 1, 1], rate=atrous_rates[2], is_normal_conv=False,
                                  weight_decay=weight_decay)
 
@@ -48,13 +48,13 @@ def atrous_spatial_pyramid_pooling(inputs, atrous_rates, weight_decay, is_traini
             # global average pooling
             image_level_features = tf.reduce_mean(inputs, [1, 2], name='global_average_pooling', keepdims=True)
             # 1x1 convolution with 256 filters( and batch normalization)
-            image_level_features = _conv_layer(image_level_features, [1, 1, 1024, 1024], "ilf_conv_1x1",
+            image_level_features = _conv_layer(image_level_features, [1, 1, 512, 256], "ilf_conv_1x1",
                                                is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
             # bilinearly upsample features
             image_level_features = tf.image.resize_bilinear(image_level_features, inputs_size, name='upsample')
 
         net = tf.concat([conv_1x1, conv_3x3_1, conv_3x3_2, conv_3x3_3, image_level_features], axis=3, name='concat')
-        net = _conv_layer(net, [1, 1, 1024*5, 1024], "conv_1x1_concat",
+        net = _conv_layer(net, [1, 1, 256*5, 512], "conv_1x1_concat",
                           is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
 
         return net
@@ -257,27 +257,27 @@ def unet_road_detection(x, dropout, is_training, weight_decay, crop, num_input_b
                           strides=[1, 1, 1, 1], pad='SAME', activation='elu')
     conv4_2 = _conv_layer(conv4_1, [3, 3, 512, 512], "conv4_2", weight_decay, is_training,
                           strides=[1, 1, 1, 1], pad='SAME', activation='elu')
-    s_pool4 = math.ceil(s_pool3 / float(2))
-    pool4 = _max_pool(conv4_2, [1, 2, 2, 1], [1, 2, 2, 1], 'pool4', pad='SAME')
-
-    conv5_1 = _conv_layer(pool4, [3, 3, 512, 1024], "conv5_1", weight_decay, is_training,
-                          strides=[1, 1, 1, 1], pad='SAME', activation='elu')
-    conv5_2 = _conv_layer(conv5_1, [3, 3, 1024, 1024], "conv5_2", weight_decay, is_training,
-                          strides=[1, 1, 1, 1], pad='SAME', activation='elu')
+    # s_pool4 = math.ceil(s_pool3 / float(2))
+    # pool4 = _max_pool(conv4_2, [1, 2, 2, 1], [1, 2, 2, 1], 'pool4', pad='SAME')
+    #
+    # conv5_1 = _conv_layer(pool4, [3, 3, 512, 1024], "conv5_1", weight_decay, is_training,
+    #                       strides=[1, 1, 1, 1], pad='SAME', activation='elu')
+    # conv5_2 = _conv_layer(conv5_1, [3, 3, 1024, 1024], "conv5_2", weight_decay, is_training,
+    #                       strides=[1, 1, 1, 1], pad='SAME', activation='elu')
 
     # ---------------------------------End of encoder----------------------------------
-    aspp = atrous_spatial_pyramid_pooling(conv5_2, [6, 12, 18], weight_decay, is_training)
+    aspp = atrous_spatial_pyramid_pooling(conv4_2, [6, 12, 18], weight_decay, is_training)
 
-    deconv4_1 = _deconv_layer(aspp, [2, 2, 512, 1024], _get_shape(conv5_2), 'deconv4_1', weight_decay,
-                              [1, 2, 2, 1], pad='SAME', has_bias=True)
-    # deconv4_2 = _crop_and_concat(conv2_2, deconv2_1, (s_pool2, s_pool2), (s_pool3*2, s_pool3*2))
-    deconv4_2 = tf.concat(values=[conv4_2, deconv4_1], axis=-1)
-    deconv4_3 = _conv_layer(deconv4_2, [3, 3, 1024, 512], "deconv3_3", weight_decay, is_training,
-                            strides=[1, 1, 1, 1], pad='SAME')
-    deconv4_4 = _conv_layer(deconv4_3, [3, 3, 512, 512], "deconv3_4", weight_decay, is_training,
-                            strides=[1, 1, 1, 1], pad='SAME')
+    # deconv4_1 = _deconv_layer(aspp, [2, 2, 512, 1024], _get_shape(conv5_2), 'deconv4_1', weight_decay,
+    #                           [1, 2, 2, 1], pad='SAME', has_bias=True)
+    # # deconv4_2 = _crop_and_concat(conv2_2, deconv2_1, (s_pool2, s_pool2), (s_pool3*2, s_pool3*2))
+    # deconv4_2 = tf.concat(values=[conv4_2, deconv4_1], axis=-1)
+    # deconv4_3 = _conv_layer(deconv4_2, [3, 3, 1024, 512], "deconv4_3", weight_decay, is_training,
+    #                         strides=[1, 1, 1, 1], pad='SAME')
+    # deconv4_4 = _conv_layer(deconv4_3, [3, 3, 512, 512], "deconv4_4", weight_decay, is_training,
+    #                         strides=[1, 1, 1, 1], pad='SAME')
 
-    deconv3_1 = _deconv_layer(deconv4_4, [2, 2, 256, 512], _get_shape(conv4_2), 'deconv3_1', weight_decay,
+    deconv3_1 = _deconv_layer(aspp, [2, 2, 256, 512], _get_shape(conv4_2), 'deconv3_1', weight_decay,
                               [1, 2, 2, 1], pad='SAME', has_bias=True)
     # deconv3_2 = _crop_and_concat(conv2_2, deconv2_1, (s_pool2, s_pool2), (s_pool3*2, s_pool3*2))
     deconv3_2 = tf.concat(values=[conv3_2, deconv3_1], axis=-1)

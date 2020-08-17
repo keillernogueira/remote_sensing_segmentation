@@ -46,7 +46,7 @@ class TrainValTestLoader:
         print(self.test_data.shape, self.test_labels.shape)
         self.train_distrib = create_distrib_multi_images(self.train_labels, model, self.reference_crop_size,
                                                          self.reference_stride_crop, self.num_classes, self.dataset,
-                                                         filtering_non_classes=True)
+                                                         filtering_non_classes=False)  # TODO ATTENTION
         self.test_distrib = create_distrib_multi_images(self.test_labels, model, self.reference_crop_size,
                                                         self.reference_stride_crop, self.num_classes, self.dataset)
         print(len(self.train_distrib), len(self.test_distrib))

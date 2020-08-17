@@ -42,6 +42,8 @@ def model_factory(model_name, x, dropout, is_training, weight_decay,
         return unet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features)
     elif model_name == 'unet_4':
         return unet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features)
+    elif model_name == 'unet_road_detection':
+        return unet_road_detection(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features)
 
     elif model_name == 'deeplabv3+':
         return deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features)

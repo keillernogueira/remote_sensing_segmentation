@@ -545,7 +545,7 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
 def train(loader, lr_initial, batch_size, niter,
           weight_decay, update_type, distribution_type, values,
           patch_acc_loss, patch_occur, patch_chosen_values, probs,
-          output_path, model_name, former_model_path=None):
+          output_path, model_name, former_model_path=None, _ssim=False):
 
     # Network Parameters
     dropout = 0.5  # Dropout, probability to keep units
@@ -564,19 +564,19 @@ def train(loader, lr_initial, batch_size, niter,
     logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
                            crop, len(loader._mean), loader.num_classes, values[0])
 
-    # Define loss and optimizer
-    loss = loss_def(model_name, logits, y, mask)
-
-    global_step = tf.Variable(0, name='main_global_step', trainable=False)
-    lr = tf.compat.v1.train.exponential_decay(lr_initial, global_step, 50000, 0.5, staircase=True)
-    optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate=lr, momentum=0.9).minimize(loss,
-                                                                                              global_step=global_step)
-
     # Define Metric Evaluate model
     if model_name == 'pixelwise':
         pred = tf.argmax(logits, axis=1)
     else:
         pred = tf.argmax(logits, axis=3)
+
+    # Define loss and optimizer
+    loss = loss_def(model_name, logits, y, mask, _ssim, pred)
+
+    global_step = tf.Variable(0, name='main_global_step', trainable=False)
+    lr = tf.compat.v1.train.exponential_decay(lr_initial, global_step, 50000, 0.5, staircase=True)
+    optimizer = tf.compat.v1.train.MomentumOptimizer(learning_rate=lr, momentum=0.9).minimize(loss,
+                                                                                              global_step=global_step)
 
     # Add ops to save and restore all the variables.
     saver = tf.compat.v1.train.Saver(max_to_keep=(None if 'dilated' in model_name else 5))
@@ -860,6 +860,8 @@ def main():
     parser.add_argument('--weight_decay', type=float, default=0.005, help='Weight decay')
     parser.add_argument('--batch_size', type=int, default=32, help='Batch size')
     parser.add_argument('--niter', type=int, default=200000, help='Number of iterations')
+    parser.add_argument('--ssim', type=str2bool, default=False,
+                        help='Use SSIM loss.')
 
     # dynamic dilated convnet options
     parser.add_argument('--reference_crop_size', type=int, default=25, help='Reference crop size.')
@@ -898,7 +900,7 @@ def main():
                   (None if args.distribution_type == 'single_fixed' else patch_occur),
                   (None if args.distribution_type == 'single_fixed' else patch_chosen_values),
                   (None if args.distribution_type != 'multinomial' else probs),
-                  args.output_path, args.model_name, args.model_path)
+                  args.output_path, args.model_name, args.model_path, args.ssim)
         # elif args.operation == 'validate_test':
         #     test_or_validate_whole_images(args.model_path.split(","), loader,
         #                                   args.batch_size, args.weight_decay, args.update_type,
