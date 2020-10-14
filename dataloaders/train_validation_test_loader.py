@@ -31,7 +31,7 @@ class TrainValTestLoader:
         self.train_distrib = None
         self.test_distrib = None
 
-        if dataset == 'arvore':
+        if dataset == 'tree':
             self.train_data, self.train_labels, _ = self.load_images('train', simulate_images=simulate_images)
             self.test_data, self.test_labels, self.test_name = self.load_images(
                 ('validation' if is_validation else 'test'), simulate_images=simulate_images)
@@ -39,6 +39,9 @@ class TrainValTestLoader:
             self.train_data, self.train_labels, _ = self.load_images_road(['2', '3'], simulate_images=simulate_images)
             self.test_data, self.test_labels, self.test_name = self.load_images_road(['4'],
                                                                                      simulate_images=simulate_images)
+        elif dataset == 'river':
+            self.train_data, self.train_labels, _ = self.load_images_river('train', fold=1)
+            self.test_data, self.test_labels, self.test_name = self.load_images_river('test', fold=1)
         else:
             raise NotImplementedError('DataLoader not identified: ' + dataset)
 
@@ -46,7 +49,7 @@ class TrainValTestLoader:
         print(self.test_data.shape, self.test_labels.shape)
         self.train_distrib = create_distrib_multi_images(self.train_labels, model, self.reference_crop_size,
                                                          self.reference_stride_crop, self.num_classes, self.dataset,
-                                                         filtering_non_classes=False)  # TODO ATTENTION
+                                                         filtering_non_classes=True)  # TODO ATTENTION
         self.test_distrib = create_distrib_multi_images(self.test_labels, model, self.reference_crop_size,
                                                         self.reference_stride_crop, self.num_classes, self.dataset)
         print(len(self.train_distrib), len(self.test_distrib))
@@ -92,12 +95,32 @@ class TrainValTestLoader:
             names.append('area' + area)
 
             # print(os.path.join(self.dataset_input_path, stage, 'images', f))
-            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '.tif')))
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_landsat7_sr.tif')))
             images.append(image)
 
             # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
             mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_mask.tif'))).astype(int)
             mask = dilation(mask, disk(3))  # used to enlarge the road annotations
+            masks.append(mask)
+
+        return np.asarray(images), np.asarray(masks), np.asarray(names)
+
+    def load_images_river(self, stage, fold=1):
+        images = []
+        masks = []
+        names = []
+
+        for f in np.loadtxt(os.path.join(self.dataset_input_path, stage + '_fold_' + str(fold) + '.txt'), dtype='str'):
+            names.append(f)
+
+            # print(os.path.join(self.dataset_input_path, stage, 'images', f))
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'Raster_Original', f)))
+            images.append(image)
+
+            # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
+            mask = imageio.imread(os.path.join(self.dataset_input_path, 'Raster_Rotulado', f)).astype(int)
+            mask[np.where(mask == 3)] = 1  # change pixels with values 3 to 1
+            assert(len(np.bincount(mask.flatten())) == 2)
             masks.append(mask)
 
         return np.asarray(images), np.asarray(masks), np.asarray(names)

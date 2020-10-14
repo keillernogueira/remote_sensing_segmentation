@@ -1,6 +1,7 @@
 import imageio
 import numpy as np
 import argparse
+import matplotlib.pyplot as plt
 
 
 def get_heatmap(x, y, h, w, sigma):
@@ -32,9 +33,11 @@ def main():
     x, y = np.where(img == 1)
     print(x.shape, y.shape)
 
-    heat_map = get_heatmap(x, y, h, w, sigma=8.0)
-    print(np.min(heat_map), np.max(heat_map), heat_map.shape)
-    imageio.imwrite(args.output, heat_map)
+    # heat_map = get_heatmap(x, y, h, w, sigma=8.0)
+    # print(np.min(heat_map), np.max(heat_map), heat_map.shape)
+    # imageio.imwrite(args.output, heat_map)
+    plt.imshow(img[5000:5500, 5000:5500], cmap='jet')
+    plt.show()
 
 
 if __name__ == "__main__":

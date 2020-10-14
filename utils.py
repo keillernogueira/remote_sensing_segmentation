@@ -237,3 +237,27 @@ def f1_with_cm(conf_matrix):
         f1[i] = 2 * ((precision[i]*recall[i])/(precision[i]+recall[i]))
 
     return np.mean(f1)
+
+
+def generate_gt_road(input_path, output_path):
+    img = imageio.imread(input_path)
+    print(img.shape)
+    from skimage.morphology import dilation, disk
+    mask = dilation(img, disk(3))
+    imageio.imwrite(output_path, mask.astype(np.uint8) * 255)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='utils')
+    # general options
+    parser.add_argument('--input_image_path', type=str, required=True, help='Input image path')
+    parser.add_argument('--output_image_path', type=str, required=True, help='Output image path')
+    args = parser.parse_args()
+    print(args)
+    img = imageio.imread(args.input_image_path)
+    print(img.shape)
+    for i in range(img.shape[2]):
+        print(i+1, np.min(img[:, :, i]), np.max(img[:, :, i]))
+    print(np.count_nonzero(np.isnan(img)))
+    print(img[500:550, 500:550, :])
+    # generate_gt_road(args.input_image_path, args.output_image_path)

@@ -5,11 +5,11 @@ from dataloaders.train_validation_test_loader import TrainValTestLoader
 def dataloader_factory(dataset, dataset_input_path, dataset_gt_path, num_classes, output_path,
                        model_name, reference_crop_size, reference_stride_crop,
                        is_validation, simulate_dataset):
-    if dataset == 'laranja':
+    if dataset == 'orange':
         return UniqueImageLoader(dataset, dataset_input_path, dataset_gt_path, num_classes, output_path,
                                  model_name, reference_crop_size, reference_stride_crop,
                                  simulate_dataset)
-    elif dataset == 'arvore' or dataset == 'road_detection':
+    elif dataset == 'tree' or dataset == 'road_detection' or dataset == 'river':
         return TrainValTestLoader(dataset, dataset_input_path, num_classes, output_path,
                                   model_name, reference_crop_size, reference_stride_crop,
                                   is_validation, simulate_dataset)

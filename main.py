@@ -667,9 +667,9 @@ def train(loader, lr_initial, batch_size, niter,
                 print(np.min(b_mask), np.max(b_mask), np.isnan(b_mask).any())
                 print('---')
                 print(b_x.shape)
-                print(b_y.shape, np.bincount(b_y.flatten()))
+                print(b_y.shape, np.bincount(b_y.flatten()), np.min(b_y), np.max(b_y))
                 print(b_mask.shape, np.bincount(b_mask.astype(int).flatten()))
-                print(batch_pred_up.shape, np.bincount(batch_pred_up.flatten()))
+                print(batch_pred_up.shape, np.bincount(batch_pred_up.flatten()), np.min(batch_pred_up), np.max(batch_pred_up))
                 print(batch_logits.shape, b_y.shape)
                 print(np.min(batch_logits), np.max(batch_logits))
                 print('-------------------------NaN-----------------------------------------------')
@@ -845,7 +845,7 @@ def main():
                         help='Used to speed up the development process.')
 
     # dataset options
-    parser.add_argument('--dataset', type=str, help='Dataset [Options: laranja | arvore | road_detection].')
+    parser.add_argument('--dataset', type=str, help='Dataset [Options: orange | tree | road_detection | river].')
     parser.add_argument('--dataset_input_path', type=str, help='Dataset path.')
     parser.add_argument('--dataset_gt_path', type=str, help='Ground truth path.')
     parser.add_argument('--num_classes', type=int, help='Number of classes.')
