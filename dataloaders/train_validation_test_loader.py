@@ -48,10 +48,15 @@ class TrainValTestLoader:
         print(self.train_data.shape, self.train_labels.shape)
         print(self.test_data.shape, self.test_labels.shape)
         self.train_distrib = create_distrib_multi_images(self.train_labels, model, self.reference_crop_size,
-                                                         self.reference_stride_crop, self.num_classes, self.dataset,
-                                                         filtering_non_classes=True)  # TODO ATTENTION
+                                                         self.reference_stride_crop, self.num_classes,
+                                                         filtering_non_classes=(dataset == 'road_detection' or
+                                                                                dataset == 'river'),
+                                                         percentage_filter=(0.8 if dataset == 'road_detection' else 0.99),
+                                                         percentage_pos_class=(0.1 if dataset == 'road_detection' else 0.5))
+        # using reference_crop_size instead of reference_stride_crop for the line BELOW
+        # to allow a better validation without intersection of the patches
         self.test_distrib = create_distrib_multi_images(self.test_labels, model, self.reference_crop_size,
-                                                        self.reference_stride_crop, self.num_classes, self.dataset)
+                                                        self.reference_crop_size, self.num_classes, self.dataset)
         print(len(self.train_distrib), len(self.test_distrib))
         self._mean, self._std = create_or_load_mean(self.train_data, self.train_distrib,
                                                     self.reference_crop_size, self.reference_stride_crop,
@@ -95,12 +100,13 @@ class TrainValTestLoader:
             names.append('area' + area)
 
             # print(os.path.join(self.dataset_input_path, stage, 'images', f))
-            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_landsat7_sr.tif')))
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'area' + area +
+                                                             '_landsat8_toa_2013_pansharpen.tif')))
+            image[np.where(np.isnan(image))] = 0  # replace nan values with 0's
             images.append(image)
 
             # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
-            mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_mask.tif'))).astype(int)
-            mask = dilation(mask, disk(3))  # used to enlarge the road annotations
+            mask = (imageio.imread(os.path.join(self.dataset_input_path, 'area' + area + '_mask.png'))).astype(int)
             masks.append(mask)
 
         return np.asarray(images), np.asarray(masks), np.asarray(names)
@@ -114,13 +120,14 @@ class TrainValTestLoader:
             names.append(f)
 
             # print(os.path.join(self.dataset_input_path, stage, 'images', f))
-            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'Raster_Original', f)))
-            images.append(image)
+            image = img_as_float(imageio.imread(os.path.join(self.dataset_input_path, 'Raster_Original',
+                                                             '8Bit_Raster_Foto_' + f.split(".")[0][-1] + '.tif')))
+            images.append(image[0:512, 0:512])
 
             # print(os.path.join(self.dataset_input_path, stage, 'labels', f))
             mask = imageio.imread(os.path.join(self.dataset_input_path, 'Raster_Rotulado', f)).astype(int)
             mask[np.where(mask == 3)] = 1  # change pixels with values 3 to 1
             assert(len(np.bincount(mask.flatten())) == 2)
-            masks.append(mask)
+            masks.append(mask[0:512, 0:512])
 
         return np.asarray(images), np.asarray(masks), np.asarray(names)

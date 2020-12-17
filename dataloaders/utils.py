@@ -5,7 +5,8 @@ import scipy
 import numpy as np
 
 
-def create_distrib_multi_images(labels, model, crop_size, stride_size, num_classes, dataset, filtering_non_classes=False):
+def create_distrib_multi_images(labels, model, crop_size, stride_size, num_classes, filtering_non_classes=False,
+                                percentage_filter=0.8, percentage_pos_class=0.10):
     classes = []
     counter = num_classes * [0]
 
@@ -41,12 +42,12 @@ def create_distrib_multi_images(labels, model, crop_size, stride_size, num_class
                     counter[_cl] += 1
                 else:
                     count = np.bincount(patch_class.astype(int).flatten())
-                    if dataset == 'road_detection' and filtering_non_classes is True:
+                    if filtering_non_classes is True:
                         if len(count) == 2:
-                            if count[1] > 0.10 * count[0]:
+                            if count[1] > percentage_pos_class * count[0]:
                                 classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
                                 counter[1] += 1
-                            elif random.random() > 0.8:
+                            elif random.random() > percentage_filter:
                                     classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
                                     counter[0] += 1
                     else:

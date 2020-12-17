@@ -7,7 +7,7 @@ def main():
     folder = 'C:\\Users\\keill\\Desktop\\Datasets\\Bacia_SantoAntonio_Revisado\\'
 
     names = []
-    for f in os.listdir(os.path.join(folder, 'Raster_Original')):
+    for f in os.listdir(os.path.join(folder, 'Raster_Rotulado')):
         names.append(f)
     names = np.asarray(names)
 

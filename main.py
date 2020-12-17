@@ -536,10 +536,12 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
           " IoU= " + "{:.4f}".format(_sum_iou) +
           " Confusion Matrix= " + np.array_str(all_cm_test2).replace("\n", "")
           )
+
     if feat1 is not None:
         return prob_im_argmax, feat1_im_n, feat2_im_n
     else:
-        return prob_im_argmax
+        return prob_im_argmax, total / float(np.sum(all_cm_test2)), _sum / float(loader.num_classes), \
+               f1_cm, kappa_cm, _sum_iou, all_cm_test2
 
 
 def train(loader, lr_initial, batch_size, niter,
@@ -579,7 +581,7 @@ def train(loader, lr_initial, batch_size, niter,
                                                                                               global_step=global_step)
 
     # Add ops to save and restore all the variables.
-    saver = tf.compat.v1.train.Saver(max_to_keep=(None if 'dilated' in model_name else 5))
+    saver = tf.compat.v1.train.Saver(max_to_keep=None)
     # restore
     saver_restore = tf.compat.v1.train.Saver()
 
@@ -590,6 +592,8 @@ def train(loader, lr_initial, batch_size, niter,
     shuffle = np.asarray(random.sample(range(total_length), total_length))
     epoch_counter = 1
     current_iter = 1
+
+    best_records = []
 
     # Launch the graph
     # gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.7)
@@ -731,19 +735,22 @@ def train(loader, lr_initial, batch_size, niter,
 
             # DISPLAY VALIDATION
             if step % VAL_INTERVAL == 0:
-                saver.save(sess, output_path + 'model', global_step=step)
                 if distribution_type == 'multi_fixed' or distribution_type == 'uniform' \
                         or distribution_type == 'multinomial':
-                    np.save(output_path + 'patch_acc_loss_step_' + str(step) + '.npy', patch_acc_loss)
-                    np.save(output_path + 'patch_occur_step_' + str(step) + '.npy', patch_occur)
-                    np.save(output_path + 'patch_chosen_values_step_' + str(step) + '.npy', patch_chosen_values)
                     cur_patch_val = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur,
                                                            update_type, patch_chosen_values, debug=True)
                 else:
                     cur_patch_val = int(values[0])
 
-                validation(sess, model_name, loader, batch_size, x, y, crop,
-                           keep_prob, is_training, pred, logits, step, cur_patch_val)
+                # validation
+                _, acc, nacc, f1, kappa, iou, cm = validation(sess, model_name, loader, batch_size, x, y, crop,
+                                                              keep_prob, is_training, pred, logits, step, cur_patch_val)
+
+                nacc = random.uniform(80, 100)
+                print('----------------------------------------------', step, acc, nacc, f1, kappa, iou, cm)
+                save_best_models(sess, output_path, distribution_type, patch_acc_loss, patch_occur, patch_chosen_values,
+                                 saver, best_records, step, acc, nacc, f1, kappa, iou, cm)
+                print(best_records)
 
             # EPOCH IS COMPLETE
             if min(it + batch_size, total_length) == total_length or total_length == it + batch_size:
@@ -751,25 +758,26 @@ def train(loader, lr_initial, batch_size, niter,
 
         print("Optimization Finished!")
 
-        # SAVE STATE
-        saver.save(sess, output_path + 'model', global_step=step)
         if distribution_type == 'multi_fixed' or distribution_type == 'uniform' or distribution_type == 'multinomial':
-            np.save(output_path + 'patch_acc_loss_step_' + str(step) + '.npy', patch_acc_loss)
-            np.save(output_path + 'patch_occur_step_' + str(step) + '.npy', patch_occur)
-            np.save(output_path + 'patch_chosen_values_step_' + str(step) + '.npy', patch_chosen_values)
             cur_patch_val = select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occur, update_type,
                                                    patch_chosen_values, debug=True)
         else:
             cur_patch_val = int(values[0])
-        validation(sess, model_name, loader, batch_size, x, y, crop,
-                   keep_prob, is_training, pred, logits, step, cur_patch_val)
+        # validation
+        _, acc, nacc, f1, kappa, iou, cm = validation(sess, model_name, loader, batch_size, x, y, crop,
+                                                      keep_prob, is_training, pred, logits, step, cur_patch_val)
 
+        # SAVE STATE
+        save_best_models(sess, output_path, distribution_type, patch_acc_loss, patch_occur, patch_chosen_values,
+                         saver, best_records, step, acc, nacc, f1, kappa, iou, cm)
+
+        print(best_records)
     tf.compat.v1.reset_default_graph()
 
 
 def generate_final_maps(former_model_path, loader,
                         batch_size, weight_decay,
-                        update_type, distribution_type, model_name, values, output_path):
+                        update_type, distribution_type, model_name, values, output_path, feat=False):
     # PLACEHOLDERS
     crop = tf.compat.v1.placeholder(tf.int32)
     x = tf.compat.v1.placeholder(tf.float32, [None, None])
@@ -805,31 +813,36 @@ def generate_final_maps(former_model_path, loader,
         print(" -- Time " + str(datetime.datetime.now().time()))
         prob_im_argmax, feat1_out, feat2_out = validation(sess, model_name, loader, batch_size, x, y, crop, keep_prob,
                                                           is_training, pred_up, logits, current_iter,
-                                                          crop_size, feat1, feat2)
+                                                          crop_size, feat1=feat1, feat2=feat2)
         print(" -- Time " + str(datetime.datetime.now().time()))
+
+        if not os.path.exists(os.path.join(output_path, 'pred')):
+            os.mkdir(os.path.join(output_path, 'pred'))
 
         if isinstance(loader, UniqueImageLoader):
             create_prediction_map(os.path.join(output_path,
                                   os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_prediction'),
                                   prob_im_argmax)
-            create_prediction_map(os.path.join(output_path,
-                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat1'),
-                                  feat1_out, channels=True)
-            create_prediction_map(os.path.join(output_path,
-                                  os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat2'),
-                                  feat2_out, channels=True)
+            if feat is True:
+                create_prediction_map(os.path.join(output_path,
+                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat1'),
+                                      feat1_out, channels=True)
+                create_prediction_map(os.path.join(output_path,
+                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat2'),
+                                      feat2_out, channels=True)
         else:
             for i, m in enumerate(prob_im_argmax):
                 create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
                                                    '_prediction'), m)
-                create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                   '_feat1'), feat1_out[i], channels=True)
-                create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                   '_feat2'), feat2_out[i], channels=True)
-                # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                #                                    '_mask'), loader.test_labels[i])
-                # imageio.imwrite(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                #                              '_resave.png'), loader.test_data[i])
+                if feat is True:
+                    create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                                                       '_feat1'), feat1_out[i], channels=True)
+                    create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                                                       '_feat2'), feat2_out[i], channels=True)
+                    # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                    #                                    '_mask'), loader.test_labels[i])
+                    # imageio.imwrite(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                    #                              '_resave.png'), loader.test_data[i])
 
     tf.compat.v1.reset_default_graph()
 
