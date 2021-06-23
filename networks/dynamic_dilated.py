@@ -178,4 +178,9 @@ def dilated_grsl_rate8(x, is_training, weight_decay, crop_size, num_input_bands,
         conv = tf.nn.conv2d(pool8, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
 
-    return conv_classifier
+    if extract_features is True:
+        return [tf.image.resize_bilinear(conv1, [32, 32]), 64], \
+               [tf.image.resize_bilinear(pool5, [32, 32]), 192], \
+               [tf.image.resize_bilinear(pool8, [32, 32]), 256], conv_classifier
+    else:
+        return conv_classifier

@@ -51,8 +51,8 @@ class TrainValTestLoader:
                                                          self.reference_stride_crop, self.num_classes,
                                                          filtering_non_classes=(dataset == 'road_detection' or
                                                                                 dataset == 'river'),
-                                                         percentage_filter=(0.8 if dataset == 'road_detection' else 0.99),
-                                                         percentage_pos_class=(0.1 if dataset == 'road_detection' else 0.5))
+                                                         percentage_filter=(0.999 if dataset == 'road_detection' else 0.99),
+                                                         percentage_pos_class=0.5)  # (0.1 if dataset == 'road_detection' else 0.5))
         # using reference_crop_size instead of reference_stride_crop for the line BELOW
         # to allow a better validation without intersection of the patches
         self.test_distrib = create_distrib_multi_images(self.test_labels, model, self.reference_crop_size,

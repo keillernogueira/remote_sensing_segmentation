@@ -66,7 +66,12 @@ def segnet(x, dropout, is_training, weight_decay, crop, num_input_bands, num_cla
         conv = tf.nn.conv2d(deconv1_3, kernel, [1, 1, 1, 1], padding='SAME')
         conv_classifier = tf.nn.bias_add(conv, biases, name=scope.name)
 
-    return conv_classifier
+    if extract_features is True:
+        return [tf.image.resize_bilinear(conv1_1, [32, 32]), 64], \
+               [tf.image.resize_bilinear(conv3_2, [32, 32]), 256], \
+               [tf.image.resize_bilinear(deconv1_3, [32, 32]), 64], conv_classifier
+    else:
+        return conv_classifier
 
 
 def segnet_4(x, dropout, is_training, weight_decay, crop, num_input_bands, num_classes, crop_size, extract_features):

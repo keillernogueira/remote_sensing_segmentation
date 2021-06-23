@@ -2,14 +2,26 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="68a1bdf6-f349-4062-ac71-f25a00ed74c7" name="Default Changelist" comment="">
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/remote_sensing_segmentation.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/remote_sensing_segmentation.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/check_bug.py" beforeDir="false" afterPath="$PROJECT_DIR$/check_bug.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dataloaders/spliters.py" beforeDir="false" afterPath="$PROJECT_DIR$/dataloaders/spliters.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dataloaders/train_validation_test_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/dataloaders/train_validation_test_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dataloaders/unique_image_loader.py" beforeDir="false" afterPath="$PROJECT_DIR$/dataloaders/unique_image_loader.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/dataloaders/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/dataloaders/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/generate_folds.py" beforeDir="false" afterPath="$PROJECT_DIR$/generate_folds.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/generate_split_image.py" beforeDir="false" afterPath="$PROJECT_DIR$/generate_split_image.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/networks/layers.py" beforeDir="false" afterPath="$PROJECT_DIR$/networks/layers.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/script_orange.sh" beforeDir="false" afterPath="$PROJECT_DIR$/script_orange.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/script_river.sh" beforeDir="false" afterPath="$PROJECT_DIR$/script_river.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/script_tree.sh" beforeDir="false" afterPath="$PROJECT_DIR$/script_tree.sh" afterDir="false" />
     </list>
-    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -24,6 +36,7 @@
     <option name="width" value="1346" />
     <option name="height" value="688" />
   </component>
+  <component name="ProjectId" id="1u5ZO898qXKd1eJd1GtqLkuTPFa" />
   <component name="ProjectView">
     <navigator proportions="" version="1">
       <foldersAlwaysOnTop value="true" />
@@ -34,20 +47,9 @@
     </panes>
   </component>
   <component name="PropertiesComponent">
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
     <property name="SHARE_PROJECT_CONFIGURATION_FILES" value="true" />
     <property name="last_opened_file_path" value="$PROJECT_DIR$" />
-  </component>
-  <component name="RunDashboard">
-    <option name="ruleStates">
-      <list>
-        <RuleState>
-          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
-        </RuleState>
-        <RuleState>
-          <option name="name" value="StatusDashboardGroupingRule" />
-        </RuleState>
-      </list>
-    </option>
   </component>
   <component name="SvnConfiguration">
     <configuration />

@@ -9,6 +9,7 @@ def create_distrib_multi_images(labels, model, crop_size, stride_size, num_class
                                 percentage_filter=0.8, percentage_pos_class=0.10):
     classes = []
     counter = num_classes * [0]
+    pixel_count = np.zeros(num_classes)
 
     c, w, h = labels.shape
 
@@ -46,20 +47,26 @@ def create_distrib_multi_images(labels, model, crop_size, stride_size, num_class
                         if len(count) == 2:
                             if count[1] > percentage_pos_class * count[0]:
                                 classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                                pixel_count += np.bincount(patch_class.flatten())
                                 counter[1] += 1
                             elif random.random() > percentage_filter:
                                     classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                                    pixel_count += np.bincount(patch_class.flatten())
                                     counter[0] += 1
                     else:
                         if len(count) == 2:
                             classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                            pixel_count += np.bincount(patch_class.flatten())
                             counter[1] += 1
                         else:
                             classes.append((cur_map, cur_x, cur_y, np.bincount(patch_class.flatten())))
+                            pixel_count += np.bincount(patch_class.flatten())
                             counter[0] += 1
 
     for i in range(len(counter)):
         print('Class ' + str(i) + ' has length ' + str(counter[i]))
+
+    print(pixel_count)
 
     return np.asarray(classes)
 

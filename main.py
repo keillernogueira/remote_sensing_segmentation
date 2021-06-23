@@ -1,4 +1,5 @@
 import os
+import time
 import re
 import math
 import datetime
@@ -381,7 +382,7 @@ from networks.loss import loss_def
 
 
 def validation(sess, model_name, loader, batch_size, x, y, crop,
-               keep_prob, is_training, pred_up, logits, step, crop_size, feat1=None, feat2=None):
+               keep_prob, is_training, pred_up, logits, step, crop_size, feats=None):
     linear = np.arange(len(loader.test_distrib))
     # all_cm_test = np.zeros((loader.num_classes, loader.num_classes), dtype=np.uint32)
     # first = True
@@ -389,19 +390,19 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
     if isinstance(loader, UniqueImageLoader):
         prob_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
         occur_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], loader.num_classes], dtype=np.float32)
-        if feat1 is not None:
-            feat1_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], 256], dtype=np.float32)
-            feat2_im = np.zeros([loader.labels.shape[0], loader.labels.shape[1], 256], dtype=np.float32)
+        if feats is not None:
+            feat_low_im = np.zeros([32, 32, feats[0][1]], dtype=np.float32)
+            feat_mid_im = np.zeros([32, 32, feats[1][1]], dtype=np.float32)
+            feat_high_im = np.zeros([32, 32, feats[2][1]], dtype=np.float32)
     else:
         prob_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
                             loader.num_classes], dtype=np.float32)
         occur_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
                              loader.num_classes], dtype=np.float32)
-        if feat1 is not None:
-            feat1_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
-                                 256], dtype=np.float32)
-            feat2_im = np.zeros([loader.test_labels.shape[0], loader.test_labels.shape[1], loader.test_labels.shape[2],
-                                 256], dtype=np.float32)
+        if feats is not None:
+            feat_low_im = np.zeros([loader.test_labels.shape[0], 32, 32, feats[0][1]], dtype=np.float32)
+            feat_mid_im = np.zeros([loader.test_labels.shape[0], 32, 32, feats[1][1]], dtype=np.float32)
+            feat_high_im = np.zeros([loader.test_labels.shape[0], 32, 32, feats[2][1]], dtype=np.float32)
 
     for i in range(0, math.ceil(len(linear) / batch_size)):
         batch = linear[i * batch_size:min(i * batch_size + batch_size, len(linear))]
@@ -425,13 +426,14 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
         else:
             by = test_classes
 
-        if feat1 is None:
+        if feats is None:
             _pred_up, _logits = sess.run([pred_up, logits], feed_dict={x: bx, y: by, crop: crop_size,
                                                                        keep_prob: 1., is_training: False})
         else:
-            _pred_up, _feat1, _feat2, _logits = sess.run([pred_up, feat1, feat2, logits],
-                                                         feed_dict={x: bx, y: by, crop: crop_size,
-                                                                    keep_prob: 1., is_training: False})
+            _pred_up, _feat_low, _feat_mid, _feat_high, _logits = sess.run([pred_up, feats[0][0], feats[1][0],
+                                                                            feats[2][0], logits],
+                                                                           feed_dict={x: bx, y: by, crop: crop_size,
+                                                                                      keep_prob: 1., is_training: False})
 
         # if first is True:
         #     all_predcs = _pred_up
@@ -449,9 +451,10 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
                 cur_y = index_batch[j][1]
                 prob_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _logits[j, :, :, :]
                 occur_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
-                if feat1 is not None:
-                    feat1_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat1[j, :, :, :]
-                    feat2_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat2[j, :, :, :]
+                if feats is not None:
+                    feat_low_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_low[j, :, :, :]
+                    feat_mid_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_mid[j, :, :, :]
+                    feat_high_im[cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_high[j, :, :, :]
             else:
                 cur_map = index_batch[j][0]
                 cur_x = index_batch[j][1]
@@ -471,9 +474,10 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
 
                 prob_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _logits[j, :, :, :]
                 occur_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += 1
-                if feat1 is not None:
-                    feat1_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat1[j, :, :, :]
-                    feat2_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat2[j, :, :, :]
+                if feats is not None:
+                    feat_low_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_low[j, :, :, :]
+                    feat_mid_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_mid[j, :, :, :]
+                    feat_high_im[cur_map, cur_x:cur_x + crop_size, cur_y:cur_y + crop_size, :] += _feat_high[j, :, :, :]
 
     # if model_name == 'pixelwise':
     #     calc_accuracy_by_class(all_labels, all_predcs, loader.num_classes, all_cm_test)
@@ -507,9 +511,10 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
 
     occur_im[np.where(occur_im == 0)] = 1
     prob_im_argmax = np.argmax(prob_im / occur_im.astype(float), axis=-1)
-    if feat1 is not None:
-        feat1_im_n = feat1_im / np.repeat(occur_im.astype(float), 128, axis=-1)
-        feat2_im_n = feat2_im / np.repeat(occur_im.astype(float), 128, axis=-1)
+    if isinstance(loader, UniqueImageLoader) and feats is not None:
+        feat_low_im = feat_low_im / np.repeat(occur_im.astype(float), 128, axis=-1)
+        feat_mid_im = feat_mid_im / np.repeat(occur_im.astype(float), 128, axis=-1)
+        feat_high_im = feat_high_im / np.repeat(occur_im.astype(float), 128, axis=-1)
 
     all_cm_test2 = create_cm(loader.labels if isinstance(loader, UniqueImageLoader) else loader.test_labels,
                              prob_im_argmax)
@@ -537,8 +542,8 @@ def validation(sess, model_name, loader, batch_size, x, y, crop,
           " Confusion Matrix= " + np.array_str(all_cm_test2).replace("\n", "")
           )
 
-    if feat1 is not None:
-        return prob_im_argmax, feat1_im_n, feat2_im_n
+    if feats is not None:
+        return prob_im_argmax, feat_low_im, feat_mid_im, feat_high_im
     else:
         return prob_im_argmax, total / float(np.sum(all_cm_test2)), _sum / float(loader.num_classes), \
                f1_cm, kappa_cm, _sum_iou, all_cm_test2
@@ -747,7 +752,6 @@ def train(loader, lr_initial, batch_size, niter,
                                                               keep_prob, is_training, pred, logits, step, cur_patch_val)
 
                 nacc = random.uniform(80, 100)
-                print('----------------------------------------------', step, acc, nacc, f1, kappa, iou, cm)
                 save_best_models(sess, output_path, distribution_type, patch_acc_loss, patch_occur, patch_chosen_values,
                                  saver, best_records, step, acc, nacc, f1, kappa, iou, cm)
                 print(best_records)
@@ -775,8 +779,7 @@ def train(loader, lr_initial, batch_size, niter,
     tf.compat.v1.reset_default_graph()
 
 
-def generate_final_maps(former_model_path, loader,
-                        batch_size, weight_decay,
+def generate_final_maps(former_model_path, loader, batch_size, weight_decay,
                         update_type, distribution_type, model_name, values, output_path, feat=False):
     # PLACEHOLDERS
     crop = tf.compat.v1.placeholder(tf.int32)
@@ -785,8 +788,14 @@ def generate_final_maps(former_model_path, loader,
     keep_prob = tf.compat.v1.placeholder(tf.float32)
     is_training = tf.compat.v1.placeholder(tf.bool, [], name='is_training')
 
-    feat1, feat2, logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
-                                         crop, len(loader._mean), loader.num_classes, values[0], extract_features=True)
+    if feat is True:
+        feat_low, feat_mid, feat_high, logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
+                                                              crop, len(loader._mean), loader.num_classes,
+                                                              values[0], extract_features=feat)
+    else:
+        logits = model_factory(model_name, x, keep_prob, is_training, weight_decay,
+                               crop, len(loader._mean), loader.num_classes,
+                               values[0], extract_features=feat)
 
     pred_up = tf.argmax(logits, axis=3)
 
@@ -811,10 +820,19 @@ def generate_final_maps(former_model_path, loader,
         # stride_crop = int(math.floor(crop_size / 2.0))
 
         print(" -- Time " + str(datetime.datetime.now().time()))
-        prob_im_argmax, feat1_out, feat2_out = validation(sess, model_name, loader, batch_size, x, y, crop, keep_prob,
-                                                          is_training, pred_up, logits, current_iter,
-                                                          crop_size, feat1=feat1, feat2=feat2)
+        start_time = time.time()
+        if feat is True:
+            prob_im_argmax, feat_low_out, feat_mid_out, feat_high_out = validation(sess, model_name, loader, batch_size,
+                                                                                   x, y, crop, keep_prob, is_training,
+                                                                                   pred_up, logits, current_iter,
+                                                                                   crop_size, feats=[feat_low, feat_mid,
+                                                                                                     feat_high])
+        else:
+            prob_im_argmax, _, _, _, _, _, _ = validation(sess, model_name, loader, batch_size, x, y, crop,
+                                                          keep_prob, is_training, pred_up, logits, current_iter,
+                                                          crop_size)
         print(" -- Time " + str(datetime.datetime.now().time()))
+        print("--- %s seconds ---" % (time.time() - start_time))
 
         if not os.path.exists(os.path.join(output_path, 'pred')):
             os.mkdir(os.path.join(output_path, 'pred'))
@@ -825,20 +843,26 @@ def generate_final_maps(former_model_path, loader,
                                   prob_im_argmax)
             if feat is True:
                 create_prediction_map(os.path.join(output_path,
-                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat1'),
-                                      feat1_out, channels=True)
+                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat_low'),
+                                      feat_low_out, channels=True)
                 create_prediction_map(os.path.join(output_path,
-                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat2'),
-                                      feat2_out, channels=True)
+                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat_mid'),
+                                      feat_mid_out, channels=True)
+                create_prediction_map(os.path.join(output_path,
+                                      os.listdir(loader.dataset_input_path)[0].split('_')[0] + '_feat_high'),
+                                      feat_high_out, channels=True)
         else:
-            for i, m in enumerate(prob_im_argmax):
-                create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                   '_prediction'), m)
+            for i in range(10):
+            # for i, m in enumerate(prob_im_argmax):
+                # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                #                                    '_prediction'), m)
                 if feat is True:
                     create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                       '_feat1'), feat1_out[i], channels=True)
+                                                       '_feat_low'), feat_low_out[i], channels=True)
                     create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
-                                                       '_feat2'), feat2_out[i], channels=True)
+                                                       '_feat_mid'), feat_mid_out[i], channels=True)
+                    create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
+                                                       '_feat_high'), feat_high_out[i], channels=True)
                     # create_prediction_map(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
                     #                                    '_mask'), loader.test_labels[i])
                     # imageio.imwrite(os.path.join(output_path, 'pred', os.path.splitext(loader.test_name[i])[0] +
@@ -856,6 +880,8 @@ def main():
                         help='Path to to save outcomes (such as images and trained models) of the algorithm.')
     parser.add_argument('--simulate_dataset', type=str2bool, default=False,
                         help='Used to speed up the development process.')
+    parser.add_argument('--save_features', type=str2bool, default=False,
+                        help='Save features of the networks.')
 
     # dataset options
     parser.add_argument('--dataset', type=str, help='Dataset [Options: orange | tree | road_detection | river].')
@@ -922,8 +948,8 @@ def main():
         elif args.operation == 'generate_map':
             generate_final_maps(args.model_path, loader,
                                 args.batch_size, args.weight_decay, args.update_type,
-                                args.distribution_type, args.model_name, args.values, args.output_path)
-
+                                args.distribution_type, args.model_name, args.values,
+                                args.output_path, args.save_features)
     elif args.operation == 'filter_results':
         try:
             f = open(args.output_path, 'r')

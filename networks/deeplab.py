@@ -80,9 +80,9 @@ def deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_cl
             net = tf.concat([net, low_level_features], axis=3, name='concat')
             net = _conv_layer(net, [3, 3, 256*2, 256], "conv_3x3_1",
                               is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
-            net = _conv_layer(net, [3, 3, 256, 256], "conv_3x3_2",
-                              is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
-            net = _conv_layer(net, [1, 1, 256, num_classes], "conv_1x1", is_training=is_training, batch_norm=False,
+            net_f = _conv_layer(net, [3, 3, 256, 256], "conv_3x3_2",
+                                is_training=is_training, strides=[1, 1, 1, 1], weight_decay=weight_decay)
+            net = _conv_layer(net_f, [1, 1, 256, num_classes], "conv_1x1", is_training=is_training, batch_norm=False,
                               has_activation=False, strides=[1, 1, 1, 1], weight_decay=weight_decay)
 
             # net = layers_lib.conv2d(net, 256, [3, 3], stride=1, scope='conv_3x3_1')
@@ -91,7 +91,8 @@ def deeplab(x, dropout, is_training, weight_decay, crop, num_input_bands, num_cl
             logits = tf.image.resize_bilinear(net, tf.shape(x)[1:3], name='upsample_2')
 
     if extract_features is True:
-        return tf.image.resize_bilinear(encoder_output, tf.shape(x)[1:3]), \
-               tf.image.resize_bilinear(low_level_features, tf.shape(x)[1:3]), logits
+        return [tf.image.resize_bilinear(low_level_features, [32, 32]), 256], \
+               [tf.image.resize_bilinear(encoder_output, [32, 32]), 256], \
+               [tf.image.resize_bilinear(net_f, [32, 32]), 256], logits
     else:
         return logits

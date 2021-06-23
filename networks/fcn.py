@@ -371,4 +371,9 @@ def fcn_50_3_2x(x, dropout, is_training, crop_size, weight_decay, num_input_band
     upscore = _deconv_layer(fuse_pool1, [4, 4, num_classes, fuse_pool1.get_shape()[3].value], output_shape,
                             'upscore', weight_decay, strides=[1, 2, 2, 1], pad='SAME')
 
-    return upscore
+    if extract_features is True:
+        return [tf.image.resize_bilinear(conv1_1, [32, 32]), 64], \
+               [tf.image.resize_bilinear(pool2, [32, 32]), 128], \
+               [tf.image.resize_bilinear(fc2, [32, 32]), 1024], upscore
+    else:
+        return upscore

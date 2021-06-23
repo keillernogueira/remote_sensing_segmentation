@@ -206,7 +206,7 @@ def select_best_patch_size(distribution_type, values, patch_acc_loss, patch_occu
 
 def create_prediction_map(img_name, prob_img, channels=False):
     if channels is True:
-        for i in range(prob_img.shape[-1]):
+        for i in range(16):  # range(prob_img.shape[-1]):
             # imageio.imwrite(img_name + 'feat_' + str(i) + '.png', prob_img[:, :, i].astype(np.uint8))
             plt.imsave(img_name + 'feat_' + str(i) + '.png', prob_img[:, :, i], cmap=plt.cm.jet)
     else:
